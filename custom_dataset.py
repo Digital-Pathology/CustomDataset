@@ -16,7 +16,6 @@ from typing import Tuple, Union
 import numpy as np
 from torch.utils.data import Dataset
 
-import Augmentation
 from Filtration import FilterManager, Filter
 import UnifiedImageReader
 import augmentation_manager
@@ -35,7 +34,7 @@ class CustomDataset(Dataset):
                  data_dir: str,
                  labels: Union[label_manager.LabelManager, str],
                  filtration: Union[Filter.Filter, FilterManager.FilterManager, NoneType],
-                 augmentation: Union[Augmentation.Augmentation, augmentation_manager.AugmentationManager, NoneType]) -> None:
+                 augmentation: Union[augmentation_manager.Augmentation, augmentation_manager.AugmentationManager, NoneType]):
         """
         Initialize Custom Dataset Object.
 
