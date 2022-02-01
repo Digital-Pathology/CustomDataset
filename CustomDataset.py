@@ -30,7 +30,7 @@ class CustomDataset(Dataset):
 
     def __init__(self, 
             data_dir: str, 
-            labels: Union[LabelManager.LabelManager, str], 
+            labels: Union[LabelManager.LabelManager, str],
             filtration: Union[Filter.Filter, FilterManager.FilterManager, NoneType], 
             augmentation: Union[Augmentation.Augmentation, AugmentationManager.AugmentationManager, NoneType]) -> None:
         """
