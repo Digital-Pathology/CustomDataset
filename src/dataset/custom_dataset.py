@@ -15,7 +15,7 @@ from typing import Tuple, Union
 import numpy as np
 from torch.utils.data import Dataset
 
-from filtration.filter_manager import FilterManager, Filter
+from filtration import FilterManager, Filter
 from unified_image_reader import Image
 
 from .label_manager import LabelManager
@@ -101,12 +101,13 @@ class CustomDataset(Dataset):
         Returns:
             np.ndarray: a numpy array representing the region at hashed index
         """
+        index = index % len(self)
         for filename, number_of_regions in self._image_files_region_counts.items():
             if index < number_of_regions:  # region at index is in image at filename
                 filename_image = Image(filename)
                 region = filename_image.get_region(
                     region_identifier=index, region_dims=(512, 512))
-                return self.process_region(region)
+                return self.process_region(region), self.label_manager[filename]
             # region at index is in another file
             index -= number_of_regions
         raise IndexError(f"Index of of bounds: {index=}, {len(self)=}")
@@ -144,11 +145,11 @@ class CustomDataset(Dataset):
             raise NotImplementedError()
         return region
 
-# class UnlabeledCustomDataset(CustomDataset):
-#
-#    def __init__(self, data_dir) -> None:
-#        super().__init__(data_dir, None)
-#        raise NotImplementedError()
-#
-#    def __getitem__(self, index): # dont return a label, and return image as numpy array???
-#        return super().__getitem__(index)
+class CustomDatasetUnlabeled(CustomDataset):
+
+   def __init__(self, data_dir) -> None:
+       super().__init__(data_dir, None)
+       raise NotImplementedError()
+
+   def __getitem__(self, index): # dont return a label, and return image as numpy array???
+       return super().__getitem__(index)
