@@ -10,20 +10,19 @@
 
 from collections import OrderedDict
 import os
-from types import NoneType
 from typing import Tuple, Union
 
 import numpy as np
 from torch.utils.data import Dataset
 
-from Filtration import FilterManager, Filter
-import UnifiedImageReader
-import augmentation_manager
-import label_manager
+from filtration.filter_manager import FilterManager, Filter
+from unified_image_reader import Image
+
+from .label_manager import LabelManager
+from .augmentation_manager import AugmentationManager, Augmentation
 
 # TODO - add augmentations
 # TODO - figure out what happens when a region doesn't pass through a filter!!!
-
 
 class CustomDataset(Dataset):
     """
@@ -32,9 +31,9 @@ class CustomDataset(Dataset):
 
     def __init__(self,
                  data_dir: str,
-                 labels: Union[label_manager.LabelManager, str],
-                 filtration: Union[Filter.Filter, FilterManager.FilterManager, NoneType],
-                 augmentation: Union[augmentation_manager.Augmentation, augmentation_manager.AugmentationManager, NoneType]):
+                 labels: Union[LabelManager, str],
+                 filtration: Union[Filter, FilterManager, None],
+                 augmentation: Union[Augmentation, AugmentationManager, None]):
         """
         Initialize Custom Dataset Object.
 
@@ -48,7 +47,7 @@ class CustomDataset(Dataset):
             int: Number of regions in all images
         """
         self.dir = data_dir
-        self.label_manager = label_manager.LabelManager(labels)
+        self.label_manager = LabelManager(labels)
 
         self._image_files_region_counts = OrderedDict(
             {filename: -1 for filename in os.listdir(self.dir)})
@@ -71,7 +70,7 @@ class CustomDataset(Dataset):
 
         for filename in self._image_files_region_counts.keys():
             filepath = os.path.join(self.dir, filename)
-            filename_image = UnifiedImageReader.Image(filepath)
+            filename_image = Image(filepath)
             self._image_files_region_counts[filename] = filename_image.number_of_regions(
                 region_dims)
         # return total number of regions
@@ -104,7 +103,7 @@ class CustomDataset(Dataset):
         """
         for filename, number_of_regions in self._image_files_region_counts.items():
             if index < number_of_regions:  # region at index is in image at filename
-                filename_image = UnifiedImageReader(filename)
+                filename_image = Image(filename)
                 region = filename_image.get_region(
                     region_identifier=index, region_dims=(512, 512))
                 return self.process_region(region)
@@ -125,7 +124,7 @@ class CustomDataset(Dataset):
         """
         if filename not in self._image_files_region_counts:
             raise Exception(f"file not found: {filename=}")
-        return UnifiedImageReader.Image(filename).get_region(region_identifier, region_dims=(512, 512))
+        return Image(filename).get_region(region_identifier, region_dims=(512, 512))
 
     def process_region(self, region: np.ndarray):
         """

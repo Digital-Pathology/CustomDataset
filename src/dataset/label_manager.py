@@ -9,7 +9,6 @@ import json
 import csv
 import os
 from typing import Any, Callable, Union
-from types import NoneType
 import abc
 
 
@@ -18,7 +17,7 @@ class LabelManager(dict):
     A dictionary wrapper for managing labels
     """
 
-    def __init__(self, path: str, label_processor: Union[Callable, NoneType] = None, **kwargs) -> None:
+    def __init__(self, path: str, label_processor: Union[Callable, None] = None, **kwargs) -> None:
         """
         Initialize a LabelManager
 
@@ -53,8 +52,8 @@ class LabelManager(dict):
 
 
 class LabelExtractor(abc.ABC):  # strategy pattern
-    @abc.abstractmethod
     @staticmethod
+    @abc.abstractmethod
     def extract_labels(path: str, **kwargs):
         pass
 
