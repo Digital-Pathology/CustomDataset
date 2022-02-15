@@ -99,6 +99,10 @@ class FiltrationCacheFile(AbstractContextManager):
         if self.context_cache is None: raise MultipleContextsException()
         self.save()
         self.context_cache = None
+    def __getitem__(self, item):
+        raise NotContextManagedException("FiltrationCacheFile must be used with a context manager. See FiltrationCacheManager example usage.")
+    def __setitem__(self, item, value):
+        raise NotContextManagedException("FiltrationCacheFile must be used with a context manager. See FiltrationCacheManager example usage.")
     def save(self):
         data = {
             "filename": self.image_filename,
@@ -138,3 +142,4 @@ class FiltrationCache:
 
 class MultipleContextsException(Exception): pass
 class ConflictingMetadataException(Exception): pass
+class NotContextManagedException(Exception): pass
