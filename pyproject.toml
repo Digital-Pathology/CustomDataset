@@ -1,8 +1,6 @@
 [build-system]
 requires = [
     "setuptools>=42",
-    "wheel",
-    "git+https://github.com/Digital-Pathology/UnifiedImageReader",
-    "git+https://github.com/Digital-Pathology/Filtration",
+    "wheel"
 ]
 build-backend = "setuptools.build_meta"
