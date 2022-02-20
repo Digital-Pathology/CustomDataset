@@ -66,7 +66,7 @@ class FiltrationCacheManager(dict):
         """ returns the filepath of the cache file in the directory """
         if os.path.dirname(filename) != self.dirname:
             filename = os.path.join(self.dirname, os.path.basename(filename))
-        return filename + ".cache.json"
+        return filename + config.filtration_cache_file_extension
 
 
 class FiltrationCacheFile(AbstractContextManager):
@@ -174,7 +174,7 @@ class FiltrationCacheFile(AbstractContextManager):
 class FiltrationCache:
     """ A simple wrapper of dict for keeping track of region filtration status """
 
-    def __init__(self, cache: Union[dict, None] = None, default_filtration_result: Union[bool, None] = config.default_filtration_result):
+    def __init__(self, cache: Union[dict, None] = None, default_filtration_status: Union[bool, None] = config.default_filtration_status):
         """ 
             FiltrationCache initializer
                 cache (dict, None): optional parameter representing an existing cache
@@ -184,13 +184,24 @@ class FiltrationCache:
             self.cache = cache
         else:
             self.cache = {}
-        self.default_filtration_result = default_filtration_result
+        self.default_filtration_status = default_filtration_status
 
     def __getitem__(self, region: int) -> bool:
-        return self.cache.get(region, self.default_filtration_result)
+        #print(f"filtration cache get item {region}")
+        return self.cache.get(str(region), self.default_filtration_status)
 
-    def __setitem__(self, region: int, filter: bool) -> None:
-        self.cache[region] = filter
+    def __setitem__(self, region: int, filtration_status: bool) -> None:
+        self.cache[str(region)] = filtration_status
+
+    def get_regions_passing_filtration(self):
+        return len(list(
+            region_num for 
+            (region_num, region_passes_filtration) in self.cache.items()
+            if region_passes_filtration
+        ))
+    
+    def get_regions_not_passing_filtration(self):
+        return len(self.cache) - self.get_regions_passing_filtration()
 
 
 class MultipleContextsException(Exception):
