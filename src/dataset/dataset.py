@@ -146,9 +146,9 @@ class Dataset(PyTorchDataset):
                 With no Filtration: c[5]
                 With Filtration: See README for details
         """
-        region = self.get_region(index)
+        region, label = self.get_region(index)
         region = self.augment_region(region)
-        return region
+        return region, label
 
     def get_region(self, index: int):
         """ gets region according to index using dark region indexing """
@@ -171,7 +171,7 @@ class Dataset(PyTorchDataset):
                 if region_passes_filtration:
                     prior_fails -= 1
                 dark_region -= 1
-        return region
+        return region, self.label_manager[image]
         
     def get_filtration_status(self, image, region_num) -> bool:
         """
@@ -227,3 +227,15 @@ class Dataset(PyTorchDataset):
         """ returns the label associated with a certain filename """
         # TODO - add expansion for region-specific labels?
         return self.label_manager[filename]
+
+    def get_label_distribution(self):
+        label_distribution = {}
+        for image, region_count in self._region_counts.items():
+            label = self.label_manager[image]
+            if label not in label_distribution:
+                label_distribution[label] = 0
+            label_distribution[label] += region_count
+            if self.filtration:
+                label_distribution[label] -= self._region_discounts[image]
+        return label_distribution
+            
