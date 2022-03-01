@@ -94,11 +94,12 @@ class Dataset(PyTorchDataset):
             {f: Image(f).number_of_regions(self.region_dims) for f in self._filepaths})
 
     def _initialize_region_discounts(self):
-        self._region_discounts = OrderedDict()
-        for image in self._region_counts.keys():
-            with self.filtration_cache_manager[image] as cache:
-                self._region_discounts[image] = cache.get_regions_not_passing_filtration(
-                )
+        if self.filtration is not None:
+            self._region_discounts = OrderedDict()
+            for image in self._region_counts.keys():
+                with self.filtration_cache_manager[image] as cache:
+                    self._region_discounts[image] = cache.get_regions_not_passing_filtration(
+                    )
 
     def _initialize_length(self):
         self._length = sum(self._region_counts.values())
@@ -180,7 +181,8 @@ class Dataset(PyTorchDataset):
         """
         #print(f"get_filtration_status({image}, {region_num})")
         if self.filtration is None:
-            return None, True
+            region = Image(image).get_region(region_num, region_dims=self.region_dims)
+            return region, True
         else:
             region = None
             region_passes_filtration = None
