@@ -115,18 +115,22 @@ class Dataset(PyTorchDataset):
     def _update_region_discounts(self, image: Union[str, None] = None):
         if self.filtration is None:
             return
-        if image is not None:  # update only one image's region discount
+        if image is None:
+            self._initialize_region_discounts()
+        else:  # update only one image's region discount
             with self.filtration_cache_manager[image] as cache:
                 self._region_discounts[image] = cache.get_regions_not_passing_filtration()
-        else:  # get region discounts for all images in dataset
-            self._initialize_region_discounts()
 
     def _update_length(self, image: Union[str, None] = None):
         if image is None:
             self._initialize_length()
         else:
-            self._length += self._region_discounts[image]
-            self._length -= self._region_discounts[image]
+            if self.filtration is None:
+                self._initialize_length()
+            else:
+                self._length -= self._region_discounts[image]
+                self._update_region_discounts(image)
+                self._length += self._region_discounts[image]
 
     def __len__(self):
         return self._length
