@@ -1,9 +1,9 @@
+
 """
     Custom Dataset
 
     1) give it a directory of images, and a set of labels for those images
     2) count the regions in each image to get an initial length
-    3) have getitem fetch an image according to some order
     4) include functionality for filtration
     5) include functionality for augmentation
 """
