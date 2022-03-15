@@ -19,7 +19,7 @@ from filtration import FilterManager, Filter
 from unified_image_reader import Image
 
 from . import config
-from .filtration_cacheing import FiltrationCacheManager
+from .filtration_cache import FiltrationCache
 from .label_manager import LabelManager
 from .util import listdir_recursive
 
@@ -59,7 +59,7 @@ class Dataset(PyTorchDataset):
         self._initialize_augmentation(augmentation)
 
         # initialize dataset length
-        self.region_dims = kwargs.get("region_dims") or config.region_dims
+        self.region_dims = kwargs.get("region_dims") or config.REGION_DIMS
         self._initialize_region_counts()
         self._initialize_region_discounts()
         self._initialize_length()
@@ -79,12 +79,12 @@ class Dataset(PyTorchDataset):
     def _initialize_filtration(self, filtration: Union[FilterManager, Filter, None], **kwargs):
         self.filtration: Union[FilterManager, Filter] = filtration
         if self.filtration:
-            self.filtration_cache_manager: FiltrationCacheManager = kwargs.get(
-                "filtration_cache_manager")
-            if not isinstance(self.filtration_cache_manager, FiltrationCacheManager):
-                # TODO - default instantiation
-                raise NotImplementedError(
-                    "applying filtration requires a FiltrationCacheManager")
+            self.filtration_cache = kwargs.get("filtration_cache") or \
+                config.DEFAULT_FILTRATION_CACHE_FILEPATH
+            if isinstance(self.filtration_cache, str):
+                self.filtration_cache = FiltrationCache(self.filtration_cache)
+            elif not isinstance(self.filtration_cache, FiltrationCache):
+                raise TypeError(type(self.filtration_cache))
 
     def _initialize_augmentation(self, augmentation: Union[albumentations.BasicTransform, albumentations.Compose, None]):
         self.augmentation = augmentation
