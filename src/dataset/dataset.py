@@ -60,8 +60,8 @@ class Dataset(PyTorchDataset):
         self._initialize_filepaths()
         self._initialize_label_manager(labels)
         self._initialize_augmentation(augmentation)
-        self._preprocess_images()
         self._initialize_filtration(filtration, filtration_cache, region_dims)
+        self._preprocess_images()
 
         # initialize dataset length
         self.region_dims = region_dims
@@ -114,10 +114,11 @@ class Dataset(PyTorchDataset):
         })
         if self.filtration is not None:
             for img in self._region_discounts.keys():
-                self._region_discounts[img] = self.filtration_cache.get_metadata(
+                metadata = self.filtration_cache.get_metadata(
                     self.filtration,
                     img
-                )["_image_dark_regions_count"]
+                )
+                self._region_discounts[img] = metadata["_image_dark_regions_count"]
 
     def _initialize_length(self):
         self._length = sum(self._region_counts.values())

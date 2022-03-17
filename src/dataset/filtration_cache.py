@@ -37,7 +37,7 @@ class FiltrationCache(AbstractContextManager):
         region_index_target = pt.IntCol(pos=1)  # region it maps to
         # filtration status of region index base
         filtration_status = pt.BoolCol(pos=2)
-    
+
     metadata_fields = [
         "_image_filepath",
         "_image_size",
@@ -93,9 +93,11 @@ class FiltrationCache(AbstractContextManager):
     def has_data(self, filtration, filepath) -> bool:
         """ checks if the filtrationcache has a table at filtration/filepath """
         group = self._get_group(filtration, create_if_missing=False)
-        if group is None: return False
+        if group is None:
+            return False
         table = self._get_table(group, filepath, create_if_missing=False)
-        if table is None or table.nrows == 0: return False
+        if table is None or table.nrows == 0:
+            return False
         return True
 
     def preprocess(self, filtration, filepath, overwrite: bool = True) -> None:
@@ -138,6 +140,7 @@ class FiltrationCache(AbstractContextManager):
             table.flush()
 
     def get_metadata(self, filtration, filepath) -> Union[int, None]:
+        """ the metadata for a table if it exists """
         if not self.has_data(filtration, filepath):
             return None
         else:
@@ -152,9 +155,11 @@ class FiltrationCache(AbstractContextManager):
             filtration (str): a string representing the applied filtration
         """
         filtration = str(filtration)
+        filtration = preprocess_filtration(filtration)
         group = None
-        if filtration not in self.h5file.root and create_if_missing:
-            group = self.h5file.create_group("/", filtration, filtration)
+        if filtration not in self.h5file.root:
+            if create_if_missing: \
+                group = self.h5file.create_group("/", filtration, filtration)
         else:
             group = self.h5file.root.__getattr__(filtration)
         return group
@@ -169,22 +174,15 @@ class FiltrationCache(AbstractContextManager):
             group (pt.Group): the group the table should belong to
             filepath (str): filepath basename points to an image file.
         """
-        filepath = self.preprocess_filepath(filepath)
+        filepath = preprocess_filepath(filepath)
         table = None
-        if filepath not in group and create_if_missing:
-            table = self.h5file.create_table(group, os.path.basename(
-                filepath), FiltrationCache.Description, os.path.basename(filepath))
+        if filepath not in group:
+            if create_if_missing: \
+                table = self.h5file.create_table(group, os.path.basename(
+                    filepath), FiltrationCache.Description, os.path.basename(filepath))
         else:
             table = group.__getattr__(filepath)
         return table
-
-    def preprocess_filepath(self, filepath: str):
-        """ pytables can't handle certain characters """
-        return os.path.basename(filepath).replace('.', '_DOTSYMBOL_')
-
-    def postprocess_filepath(self, filepath: str):
-        """ pytables can't handle certain characters """
-        return filepath.replace('_DOTSYMBOL_', '.')
 
     def __del__(self):
         """ ensures the file is closed after use - very important! context management is recommended """
@@ -192,7 +190,7 @@ class FiltrationCache(AbstractContextManager):
 
     def __enter__(self, *args, **kwargs):
         return self
-    
+
     def __exit__(self, *args, **kwagrs):
         self.__del__()
 
@@ -203,8 +201,11 @@ def preprocess(filtration, filepath):
 
 def _apply_filtration_to_regions(filtration, filepath: str) -> Tuple[Dict[int, Dict], int]:
     img = Image(filepath)
+    if img.number_of_regions() == 0:
+        raise Exception(f"no regions of size 512,512 in {filepath=}")
     records = {}
     dark_regions_total = 0
+    # TODO - get_region not parameterized here
     for region_index, region in enumerate(img):
         filtration_status = filtration(region)
         records[region_index] = {
@@ -237,3 +238,15 @@ def _apply_dark_region_mapping(records: dict, dark_regions_total: int) -> None:
 
 def clear_table(table: pt.Table) -> None:
     table.remove_rows(0)
+
+def preprocess_filepath(filepath: str):
+    """ pytables can't handle certain characters """
+    return os.path.basename(filepath).replace('.', '_DOTSYMBOL_')
+
+def postprocess_filepath(filepath: str):
+    """ pytables can't handle certain characters """
+    return filepath.replace('_DOTSYMBOL_', '.')
+
+def preprocess_filtration(filtration: str):
+    """ removes whitespace for pytables compatibility """
+    return "".join(filtration.split())
