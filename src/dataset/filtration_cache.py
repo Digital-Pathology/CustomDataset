@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
+import logging
 import os
 from typing import Dict, Iterable, Tuple, Union
 
@@ -21,6 +22,8 @@ from .util import listdir_recursive
 from . import config
 
 # TODO - parameterize region dimensions
+
+log = config.log
 
 class FiltrationCache(AbstractContextManager):
 
@@ -34,10 +37,20 @@ class FiltrationCache(AbstractContextManager):
         region_index_target = pt.IntCol(pos=1)  # region it maps to
         # filtration status of region index base
         filtration_status = pt.BoolCol(pos=2)
+    
+    metadata_fields = [
+        "_image_filepath",
+        "_image_size",
+        "_image_region_count",
+        "_image_dark_regions_count",
+        "_image_regions_discounted",
+        "_image_region_dims",
+    ]
 
     def __init__(self,
-                 h5filepath: Union[str, None] = None,
-                 h5filetitle: Union[str, None] = None) -> None:
+                 h5filepath: Union[str, None] = config.DEFAULT_FILTRATION_CACHE_FILEPATH,
+                 h5filetitle: Union[str, None] = config.DEFULAT_FILTRATION_CACHE_TITLE,
+                 region_dims: tuple = config.REGION_DIMS) -> None:
         """
             FiltrationCache init - opens the h5file which cannot be used otherwise while open here
 
@@ -45,14 +58,17 @@ class FiltrationCache(AbstractContextManager):
                                 (default filtration_cache.h5)
             h5filetitle (str): a name for the database (default filtration_cache)
         """
+        log.debug(f"FiltrationCache initialization with {h5filepath=}, {h5filetitle=}, {region_dims=}")
         # save parameters
-        self.h5filepath = h5filepath or config.DEFAULT_FILTRATION_CACHE_FILEPATH
-        self.h5filetitle = h5filetitle or config.DEFULAT_FILTRATION_CACHE_TITLE
+        self.h5filepath = h5filepath
+        self.h5filetitle = h5filetitle
+        self.region_dims = region_dims
         # open h5file
         self.h5file_openmode = "w" if not os.path.exists(
             self.h5filepath) else "a"
+        log.debug(f"FiltrationCache initialization --> {self.h5file_openmode = }")
         self.h5file = pt.open_file(
-            self.h5filepath, mode="w", title=self.h5filetitle)
+            self.h5filepath, mode=self.h5file_openmode, title=self.h5filetitle)
 
     def get_status(self, filtration, filepath, region_index: Union[int, Iterable, None] = None):
         """
@@ -82,7 +98,7 @@ class FiltrationCache(AbstractContextManager):
         if table is None or table.nrows == 0: return False
         return True
 
-    def preprocess(self, filtration, filepath, clear_first: bool = True) -> None:
+    def preprocess(self, filtration, filepath, overwrite: bool = True) -> None:
         """
             Applies filtration to image(s) at filepath (listdir recursive)
 
@@ -94,20 +110,31 @@ class FiltrationCache(AbstractContextManager):
             for f in filepaths:
                 self.preprocess(filtration, f)
         else:  # is image file
+            group, table = None, None
+            if self.has_data(filtration, filepath):
+                if not overwrite:
+                    return
+                else:
+                    group = self._get_group(filtration)
+                    table = self._get_table(group, filepath)
+                    clear_table(table)
+                    for key in FiltrationCache.metadata_fields:
+                        del(table.attrs[key])
             records, dark_regions_total = preprocess(filtration, filepath)
             group = self._get_group(filtration)
-            table: pt.Table = self._get_table(group, filepath)
-            if clear_first: clear_table(table)
+            table = self._get_table(group, filepath)
             row = table.row
             for i in range(len(records)):
                 row["region_index_base"] = i
                 row["region_index_target"] = records[i]["region_index_target"]
                 row["filtration_status"] = records[i]["filtration_status"]
                 row.append()
-            table.attrs["_image_length"] = len(records)
-            table.attrs["_image_dark_regions_total"] = dark_regions_total
-            table.attrs["_image_length_discounted"] = len(records) - dark_regions_total
-            table.attrs["_image_region_dims"] = (512, 512)
+            table.attrs["_image_filepath"] = os.path.basename(filepath)
+            table.attrs["_image_size"] = Image(filepath).dims
+            table.attrs["_image_region_count"] = len(records)
+            table.attrs["_image_dark_regions_count"] = dark_regions_total
+            table.attrs["_image_regions_discounted"] = len(records) - dark_regions_total
+            table.attrs["_image_region_dims"] = self.region_dims
             table.flush()
 
     def get_metadata(self, filtration, filepath) -> Union[int, None]:
@@ -116,12 +143,7 @@ class FiltrationCache(AbstractContextManager):
         else:
             group = self._get_group(filtration)
             table = self._get_table(group, filepath)
-            return {
-                "region_count": table.attrs["_image_length"],
-                "region_count_discounted": table.attrs["_image_length_discounted"],
-                "dark_regions_count": table.attrs["_image_dark_regions_total"],
-                "region_dims": table.attrs["_image_region_dims"]
-            }
+            return {f:table.attrs[f] for f in FiltrationCache.metadata_fields}
 
     def _get_group(self, filtration: str, create_if_missing: bool = True) -> pt.Group:
         """

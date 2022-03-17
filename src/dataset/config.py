@@ -1,4 +1,14 @@
 
+import logging as log
+
+LOG_LEVEL = log.DEBUG
+
+log.basicConfig(
+    filename = "CustomDataset.log",
+    encoding = "utf-8",
+    level = LOG_LEVEL
+)
+
 REGION_DIMS = (512, 512)
 
 DEFAULT_FILTRATION_STATUS = None
