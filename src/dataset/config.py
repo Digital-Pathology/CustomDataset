@@ -1,8 +1,21 @@
 
-region_dims = (512, 512)
+import logging as log
 
-default_filtration_status = None
+LOG_LEVEL = log.DEBUG
 
-filtration_cache_file_extension = ".cache.json"
+log.basicConfig(
+    filename = "CustomDataset.log",
+    encoding = "utf-8",
+    level = LOG_LEVEL
+)
 
-label_manager_error_if_no_label = True
+REGION_DIMS = (512, 512)
+
+DEFAULT_FILTRATION_STATUS = None
+
+DEFAULT_FILTRATION_CACHE_FILEPATH = "filtration_cache.h5"
+DEFULAT_FILTRATION_CACHE_TITLE = "filtration_cache"
+
+LABEL_MANAGER_IF_NO_LABEL = True
+
+

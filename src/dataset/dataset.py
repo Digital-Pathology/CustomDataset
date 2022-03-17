@@ -1,9 +1,9 @@
+
 """
     Custom Dataset
 
     1) give it a directory of images, and a set of labels for those images
     2) count the regions in each image to get an initial length
-    3) have getitem fetch an image according to some order
     4) include functionality for filtration
     5) include functionality for augmentation
 """
@@ -19,7 +19,7 @@ from filtration import FilterManager, Filter
 from unified_image_reader import Image
 
 from . import config
-from .filtration_cacheing import FiltrationCacheManager
+from .filtration_cache import FiltrationCache
 from .label_manager import LabelManager
 from .util import listdir_recursive
 
@@ -34,10 +34,12 @@ class Dataset(PyTorchDataset):
     def __init__(self,
                  data_dir: str,
                  labels: Union[LabelManager, str],
-                 filtration: Union[Filter, FilterManager, None] = None,
                  augmentation: Union[albumentations.BasicTransform,
                                      albumentations.Compose, None] = None,
-                 **kwargs):
+                 filtration: Union[Filter, FilterManager, None] = None,
+                 filtration_cache: Union[str, FiltrationCache, None] = \
+                     config.DEFAULT_FILTRATION_CACHE_FILEPATH,
+                 region_dims: tuple = config.REGION_DIMS):
         """
             Initialize Custom Dataset Object.
 
@@ -45,7 +47,9 @@ class Dataset(PyTorchDataset):
                 data_dir (str): Filepath to directory containing exclusively images (recursively)
                 labels (str): Filepath to labels associated with images --> see LabelManager
                 filtration: Object that applies various filters to image (optional)
-                augmentation: Object that applies various augmentation techniques to image (optional)
+                filtration_cache: Reference to cache for filtration results
+                augmentation: Applies various augmentation techniques to image (optional)
+                region_dims (tuple[int, int]): width and height of the images' regions
 
             Returns:
                 int: Number of regions in all images
@@ -55,11 +59,12 @@ class Dataset(PyTorchDataset):
         self.dir = data_dir
         self._initialize_filepaths()
         self._initialize_label_manager(labels)
-        self._initialize_filtration(filtration, **kwargs)
         self._initialize_augmentation(augmentation)
+        self._initialize_filtration(filtration, filtration_cache, region_dims)
+        self._preprocess_images()
 
         # initialize dataset length
-        self.region_dims = kwargs.get("region_dims") or config.region_dims
+        self.region_dims = region_dims
         self._initialize_region_counts()
         self._initialize_region_discounts()
         self._initialize_length()
@@ -76,17 +81,27 @@ class Dataset(PyTorchDataset):
         else:
             raise TypeError(type(labels))
 
-    def _initialize_filtration(self, filtration: Union[FilterManager, Filter, None], **kwargs):
+    def _initialize_filtration(self,
+                               filtration: Union[FilterManager, Filter, None],
+                               filtration_cache: Union[FiltrationCache, str, None],
+                               region_dims: tuple):
         self.filtration: Union[FilterManager, Filter] = filtration
         if self.filtration:
-            self.filtration_cache_manager: FiltrationCacheManager = kwargs.get(
-                "filtration_cache_manager")
-            if not isinstance(self.filtration_cache_manager, FiltrationCacheManager):
-                # TODO - default instantiation
-                raise NotImplementedError(
-                    "applying filtration requires a FiltrationCacheManager")
+            self.filtration_cache = filtration_cache
+            if isinstance(self.filtration_cache, str):
+                self.filtration_cache = \
+                    FiltrationCache(self.filtration_cache, region_dims=region_dims)
+            elif isinstance(self.filtration_cache, FiltrationCache):
+                if region_dims != self.filtration_cache.region_dims:
+                    raise Exception(
+                        f"region_dims must be the same: \
+                            {region_dims=}, {self.filtration_cache.region_dims=}")
+            else:
+                raise TypeError(type(self.filtration_cache))
 
-    def _initialize_augmentation(self, augmentation: Union[albumentations.BasicTransform, albumentations.Compose, None]):
+    def _initialize_augmentation(self,
+                                 augmentation: \
+                                    Union[albumentations.BasicTransform, albumentations.Compose, None]):
         self.augmentation = augmentation
 
     def _initialize_region_counts(self):
@@ -94,43 +109,26 @@ class Dataset(PyTorchDataset):
             {f: Image(f).number_of_regions(self.region_dims) for f in self._filepaths})
 
     def _initialize_region_discounts(self):
+        self._region_discounts = OrderedDict({
+            img: None for img in self._region_counts.keys()
+        })
         if self.filtration is not None:
-            self._region_discounts = OrderedDict()
-            for image in self._region_counts.keys():
-                with self.filtration_cache_manager[image] as cache:
-                    self._region_discounts[image] = cache.get_regions_not_passing_filtration(
-                    )
+            for img in self._region_discounts.keys():
+                metadata = self.filtration_cache.get_metadata(
+                    self.filtration,
+                    img
+                )
+                self._region_discounts[img] = metadata["_image_dark_regions_count"]
 
     def _initialize_length(self):
         self._length = sum(self._region_counts.values())
         if self.filtration is not None:
-            self._length += sum(self._region_discounts.values())
+            self._length -= sum(self._region_discounts.values())
 
-    def _update_filepaths(self):
-        self.initialize_filepaths()
-
-    def _update_region_counts(self):
-        self._initialize_region_counts()
-
-    def _update_region_discounts(self, image: Union[str, None] = None):
-        if self.filtration is None:
-            return
-        if image is None:
-            self._initialize_region_discounts()
-        else:  # update only one image's region discount
-            with self.filtration_cache_manager[image] as cache:
-                self._region_discounts[image] = cache.get_regions_not_passing_filtration()
-
-    def _update_length(self, image: Union[str, None] = None):
-        if image is None:
-            self._initialize_length()
-        else:
-            if self.filtration is None:
-                self._initialize_length()
-            else:
-                self._length -= self._region_discounts[image]
-                self._update_region_discounts(image)
-                self._length += self._region_discounts[image]
+    def _preprocess_images(self):
+        for i, image in enumerate(self._filepaths):
+            print(f"Preprocessing {i}/{len(self._filepaths)} {image}")
+            self.filtration_cache.preprocess(self.filtration, image, overwrite=False)
 
     def __len__(self):
         return self._length
@@ -151,58 +149,11 @@ class Dataset(PyTorchDataset):
                 With no Filtration: c[5]
                 With Filtration: See README for details
         """
-        region, label = self.get_region(index)
+        image, region_num = self.get_region_location_from_index(index)
+        label = self.label_manager[image]
+        region = Image(image).get_region(region_num)
         region = self.augment_region(region)
         return region, label
-
-    def get_region(self, index: int):
-        """ gets region according to index using dark region indexing """
-        image, region_num = self.get_region_location_from_index(index)
-        region, region_passes_filtration = self.get_filtration_status(image, region_num)
-        #print(f"{image=}, {region_num=}, {type(region)=}, {region_passes_filtration=}")
-        if not region_passes_filtration:
-            # figure out how many regions before this don't pass filtration
-            prior_fails = 0
-            for prior_region in range(region_num):
-                region, region_passes_filtration = self.get_filtration_status(image, prior_region)
-                #print(f"prior region {prior_region} --> {region_passes_filtration}")
-                if not region_passes_filtration:
-                    prior_fails += 1
-            # count back from end for dark regions
-            dark_region = self._region_counts[image] - 1
-            while prior_fails >= 0:
-                region, region_passes_filtration = self.get_filtration_status(image, dark_region)
-                #print(f"dark region {dark_region} --> {region_passes_filtration}")
-                if region_passes_filtration:
-                    prior_fails -= 1
-                dark_region -= 1
-        return region, self.label_manager[image]
-        
-    def get_filtration_status(self, image, region_num) -> bool:
-        """
-            coordinates filtration and filtration_cache to
-            efficiently filter regions (if necessary)
-        """
-        #print(f"get_filtration_status({image}, {region_num})")
-        if self.filtration is None:
-            region = Image(image).get_region(region_num, region_dims=self.region_dims)
-            return region, True
-        else:
-            region = None
-            region_passes_filtration = None
-            # first check the filtration cache manager
-            with self.filtration_cache_manager[image] as cache:
-                #print(cache.cache)
-                region_passes_filtration = cache[region_num]
-                if region_passes_filtration is None: # if it's not in cache then just perform filtration
-                    #print(f"{region_num=} NOT in cache")
-                    region = Image(image).get_region(region_num, region_dims=self.region_dims)
-                    region_passes_filtration = self.filtration.filter(region)
-                    cache[region_num] = region_passes_filtration
-                    self._update_length(image)
-                else:
-                    region = Image(image).get_region(region_num, region_dims=self.region_dims)
-            return region, region_passes_filtration
 
     def get_region_location_from_index(self, index: int) -> Tuple[str, int]:
         """
@@ -212,12 +163,11 @@ class Dataset(PyTorchDataset):
                 {a: 10, b: 25, c: 15}
                 index = 15 --> (b,5)
         """
-        for image in self._region_counts.keys():
-            number_of_regions = self._region_counts[image]
+        for image, region_count in self._region_counts.items():
             if self.filtration:
-                number_of_regions -= self._region_discounts[image]
-            if index >= number_of_regions:  # region at index is in another image
-                index -= number_of_regions
+                region_count -= self._region_discounts[image]
+            if index >= region_count:  # region at index is in another image
+                index -= region_count
             else:
                 return (image, index)
         raise IndexError(f"Index of of bounds: {index=}, {len(self)=}")
@@ -235,6 +185,8 @@ class Dataset(PyTorchDataset):
         return self.label_manager[filename]
 
     def get_label_distribution(self):
+        """ gives the count of regions belonging to each label -
+            assumes region label is region's image's label """
         label_distribution = {}
         for image, region_count in self._region_counts.items():
             label = self.label_manager[image]
@@ -244,4 +196,3 @@ class Dataset(PyTorchDataset):
             if self.filtration:
                 label_distribution[label] -= self._region_discounts[image]
         return label_distribution
-            
