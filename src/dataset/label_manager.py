@@ -72,7 +72,7 @@ class LabelManager:
         self.label_postprocessor = kwargs.get("label_postprocessor")
         if self.label_postprocessor is not None and not isinstance(self.label_postprocessor, Callable):
             raise TypeError(type(self.label_postprocessor))
-        self.error_if_no_label = kwargs.get("error_if_no_label") or config.label_manager_error_if_no_label
+        self.error_if_no_label = kwargs.get("error_if_no_label") or config.LABEL_MANAGER_IF_NO_LABEL
 
     def __getitem__(self, key: str) -> Any:
         # preprocess if applicable
