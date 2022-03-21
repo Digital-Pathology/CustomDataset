@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
-import logging
 import os
 from typing import Dict, Iterable, Tuple, Union
 
@@ -22,8 +21,6 @@ from .util import listdir_recursive
 from . import config
 
 # TODO - parameterize region dimensions
-
-log = config.log
 
 class FiltrationCache(AbstractContextManager):
 
@@ -58,7 +55,6 @@ class FiltrationCache(AbstractContextManager):
                                 (default filtration_cache.h5)
             h5filetitle (str): a name for the database (default filtration_cache)
         """
-        log.debug(f"FiltrationCache initialization with {h5filepath=}, {h5filetitle=}, {region_dims=}")
         # save parameters
         self.h5filepath = h5filepath
         self.h5filetitle = h5filetitle
@@ -66,7 +62,6 @@ class FiltrationCache(AbstractContextManager):
         # open h5file
         self.h5file_openmode = "w" if not os.path.exists(
             self.h5filepath) else "a"
-        log.debug(f"FiltrationCache initialization --> {self.h5file_openmode = }")
         self.h5file = pt.open_file(
             self.h5filepath, mode=self.h5file_openmode, title=self.h5filetitle)
 
