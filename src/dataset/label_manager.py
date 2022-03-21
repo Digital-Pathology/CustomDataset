@@ -12,17 +12,15 @@ import os
 from typing import Any, Callable
 
 from . import config
-from .util import listdir_recursive, path_without_basename
+from .util import listdir_recursive, path_without_basename, get_label_from_path
 
 
 class LabelManager:
-
     """
     A dictionary wrapper for managing labels
     """
 
     def __init__(self, path: str, **kwargs) -> None:
-        
         """
             Initialize a LabelManager
 
@@ -64,15 +62,18 @@ class LabelManager:
         # label preprocessing
         #   user can have the path of the file preprocessed before indexing the extracted labels
         self.label_preprocessor = kwargs.get("label_preprocessor")
-        if self.label_preprocessor is not None and not isinstance(self.label_preprocessor, Callable):
+        if self.label_preprocessor is not None and not isinstance(
+                self.label_preprocessor, Callable):
             raise TypeError(self.label_preprocessor)
 
         # label postprocessor
         #   user can have the extracted label postprocessed inside the label manager
         self.label_postprocessor = kwargs.get("label_postprocessor")
-        if self.label_postprocessor is not None and not isinstance(self.label_postprocessor, Callable):
+        if self.label_postprocessor is not None and not isinstance(
+                self.label_postprocessor, Callable):
             raise TypeError(type(self.label_postprocessor))
-        self.error_if_no_label = kwargs.get("error_if_no_label") or config.LABEL_MANAGER_IF_NO_LABEL
+        self.error_if_no_label = kwargs.get(
+            "error_if_no_label") or config.LABEL_MANAGER_IF_NO_LABEL
 
     def __getitem__(self, key: str) -> Any:
         # preprocess if applicable
@@ -89,6 +90,7 @@ class LabelManager:
 
 class LabelExtractor(abc.ABC):  # strategy pattern
     """ Strategy Pattern --> extracts labels from path for dictionary-based lookup """
+
     @staticmethod
     @abc.abstractmethod
     def extract_labels(path: str, **kwargs):
@@ -97,6 +99,7 @@ class LabelExtractor(abc.ABC):  # strategy pattern
 
 class LabelExtractorJSON(LabelExtractor):
     """ labels in json file """
+
     @staticmethod
     def extract_labels(path: str, **kwargs):
         """ labels are inside of a json file at path of structure {key: label, ...} """
@@ -106,6 +109,7 @@ class LabelExtractorJSON(LabelExtractor):
 
 class LabelExtractorCSV(LabelExtractor):
     """ labels in csv file """
+
     @staticmethod
     def extract_labels(path: str, **kwargs):
         """ labels are inside of a csv file at path of structure (each line) <key><sep><label> """
@@ -116,6 +120,7 @@ class LabelExtractorCSV(LabelExtractor):
 
 class LabelExtractorParentDir(LabelExtractor):
     """ labels represented by relative path """
+
     @staticmethod
     def extract_labels(path: str, **kwargs):
         """ labels are path relative to path arg (label_postprocessor recommended) """

@@ -1,14 +1,22 @@
-
 import os
 from typing import List
+
 
 def listdir_recursive(path: str) -> List[str]:
     """ list files (not directories) recursively from path """
     files = []
     walk = os.walk(path)
     for (directory_pointer, _, file_nodes) in walk:
-        files += [os.path.join(directory_pointer, file_node) for file_node in file_nodes]
+        files += [
+            os.path.join(directory_pointer, file_node)
+            for file_node in file_nodes
+        ]
     return files
 
-def path_without_basename(path: str):
-    return path.replace(os.path.sep+os.path.basename(path), "")
+
+def path_without_basename(path: str) -> str:
+    return os.path.dirname(path)
+
+
+def get_label_from_path(path: str) -> str:
+    return os.path.basename(os.path.dirname(path))
