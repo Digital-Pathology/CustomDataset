@@ -15,8 +15,7 @@ def listdir_recursive(path: str) -> List[str]:
 
 
 def path_without_basename(path: str) -> str:
-    return path.replace(os.path.sep + os.path.basename(path), "")
-    # return os.path.dirname(path) # this is the same code ---^
+    return os.path.dirname(path)
 
 
 def get_label_from_path(path: str) -> str:

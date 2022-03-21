@@ -125,5 +125,4 @@ class LabelExtractorParentDir(LabelExtractor):
     def extract_labels(path: str, **kwargs):
         """ labels are path relative to path arg (label_postprocessor recommended) """
         files = listdir_recursive(path)
-        # return {f: path_without_basename(f) for f in files}
-        return {f: get_label_from_path(f) for f in files}
+        return {f: path_without_basename(f) for f in files}
