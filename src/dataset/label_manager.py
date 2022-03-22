@@ -30,7 +30,7 @@ class LabelManager:
                                 - json file {filename: label}
                                 - csv (no header!)
                                 - directory (label is image's relative path to parent_dir)
-            
+
                 Optional kwargs
 
                     label_extractor (LabelExtractor): overrides automatic selection
