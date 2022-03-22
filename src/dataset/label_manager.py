@@ -12,7 +12,7 @@ import os
 from typing import Any, Callable
 
 from . import config
-from .util import listdir_recursive, path_without_basename, get_label_from_path
+from .util import listdir_recursive, path_without_basename
 
 
 class LabelManager:
