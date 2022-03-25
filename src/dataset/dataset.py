@@ -60,7 +60,6 @@ class Dataset(PyTorchDataset):
         self._initialize_label_manager(labels)
         self._initialize_augmentation(augmentation)
         self._initialize_filtration(filtration, filtration_cache, region_dims)
-        self._preprocess_images()
 
         # initialize dataset length
         self.region_dims = region_dims
@@ -98,6 +97,7 @@ class Dataset(PyTorchDataset):
                             {region_dims=}, {self.filtration_cache.region_dims=}")
             else:
                 raise TypeError(type(self.filtration_cache))
+            self._preprocess_images()
 
     def _initialize_augmentation(self, augmentation: Union[Callable, None]):
         self.augmentation = augmentation
