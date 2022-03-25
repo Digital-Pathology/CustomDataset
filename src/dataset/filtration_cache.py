@@ -15,6 +15,7 @@ import os
 from typing import Dict, Iterable, Tuple, Union
 
 import tables as pt
+import numpy as np
 
 from unified_image_reader import Image
 
@@ -84,7 +85,9 @@ class FiltrationCache(AbstractContextManager):
         table = self._get_table(group, filepath)
         if region_index is None:  # get all
             return table.read()
-        elif isinstance(region_index, int) or isinstance(region_index, Iterable):
+        elif isinstance(region_index, Iterable):
+            raise NotImplementedError(region_index)
+        elif region_index == int(region_index): # handles most library integer types
             return table[region_index]
         else:
             raise TypeError(type(region_index))
