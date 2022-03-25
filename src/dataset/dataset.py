@@ -9,9 +9,8 @@
 """
 
 from collections import OrderedDict
-from typing import Any, Tuple, Union
+from typing import Any, Callable, Tuple, Union
 
-import albumentations
 import numpy as np
 from torch.utils.data import Dataset as PyTorchDataset
 
@@ -35,8 +34,7 @@ class Dataset(PyTorchDataset):
     def __init__(self,
                  data_dir: str,
                  labels: Union[LabelManager, str],
-                 augmentation: Union[albumentations.BasicTransform,
-                                     albumentations.Compose, None] = None,
+                 augmentation: Union[Callable, None] = None,
                  filtration: Union[Filter, FilterManager, None] = None,
                  filtration_cache: Union[str, FiltrationCache, None] =
                  config.DEFAULT_FILTRATION_CACHE_FILEPATH,
@@ -49,7 +47,7 @@ class Dataset(PyTorchDataset):
                 labels (str): Filepath to labels associated with images --> see LabelManager
                 filtration: Object that applies various filters to image (optional)
                 filtration_cache: Reference to cache for filtration results
-                augmentation: Applies various augmentation techniques to image (optional)
+                augmentation: agumentation(region) returns augmented region
                 region_dims (tuple[int, int]): width and height of the images' regions
 
             Returns:
@@ -101,9 +99,7 @@ class Dataset(PyTorchDataset):
             else:
                 raise TypeError(type(self.filtration_cache))
 
-    def _initialize_augmentation(self,
-                                 augmentation:
-                                 Union[albumentations.BasicTransform, albumentations.Compose, None]):
+    def _initialize_augmentation(self, augmentation: Union[Callable, None]):
         self.augmentation = augmentation
 
     def _initialize_region_counts(self):
@@ -178,9 +174,8 @@ class Dataset(PyTorchDataset):
     def augment_region(self, region: np.ndarray) -> np.ndarray:
         """ augments a region using self.augmentation """
         if self.augmentation:
-            return self.augmentation(image=region)["image"]
-        else:
-            return region
+            return self.augmentation(region)
+        return region
 
     def get_label(self, filename: str) -> Any:
         """ returns the label associated with a certain filename """

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
+from multiprocessing import Pool
 import os
 from typing import Dict, Iterable, Tuple, Union
 
@@ -110,6 +111,7 @@ class FiltrationCache(AbstractContextManager):
             for f in filepaths:
                 self.preprocess(filtration, f)
         else:  # is image file
+            print("preprocessing file", filepath)
             group, table = None, None
             if self.has_data(filtration, filepath):
                 if not overwrite:
@@ -119,7 +121,7 @@ class FiltrationCache(AbstractContextManager):
                     table = self._get_table(group, filepath)
                     clear_table(table)
                     for key in FiltrationCache.metadata_fields:
-                        del(table.attrs[key])
+                        del table.attrs[key]
             records, dark_regions_total = preprocess(filtration, filepath)
             group = self._get_group(filtration)
             table = self._get_table(group, filepath)
@@ -195,26 +197,35 @@ class FiltrationCache(AbstractContextManager):
 
 
 def preprocess(filtration, filepath):
-    records, dark_regions_total = _apply_filtration_to_regions(
-        filtration, filepath)
+    """ returns a mapping of region index to (fitration status and dark-region-mapped region index) """
+    records, dark_regions_total = _apply_filtration_to_regions(filtration, filepath)
     _apply_dark_region_mapping(records, dark_regions_total)
     return records, dark_regions_total
 
 
 def _apply_filtration_to_regions(filtration, filepath: str) -> Tuple[Dict[int, Dict], int]:
+    """ returns a dictionary mapping region_index to filtration_status """
     img = Image(filepath)
     if img.number_of_regions() == 0:
         raise Exception(f"no regions of size 512,512 in {filepath=}")
-    records = {}
+    records = None
+    try:
+        pool = Pool()
+        # TODO - region dims not parameterized here
+        def info_generator():
+            for region_index in range(img.number_of_regions()):
+                yield (filepath, filtration, region_index)
+        records = {i: r for i,r in pool.starmap(process_region, info_generator())}
+    finally:
+        pool.close()
+        print("pool closed, joining")
+        pool.join()
+    print("finished pool:", len(records), img.number_of_regions())
+    if len(records) != img.number_of_regions():
+        raise Exception()
     dark_regions_total = 0
-    # TODO - get_region not parameterized here
-    for region_index, region in enumerate(img):
-        filtration_status = filtration(region)
-        records[region_index] = {
-            "region_index_target": -1,
-            "filtration_status": filtration_status
-        }
-        if filtration_status is False:
+    for record in records.values():
+        if record["filtration_status"] is False:
             dark_regions_total += 1
     return records, dark_regions_total
 
@@ -241,6 +252,7 @@ def _apply_dark_region_mapping(records: dict, dark_regions_total: int) -> None:
 
 
 def clear_table(table: pt.Table) -> None:
+    """ clears a pytables table of all contents (currently leaves metadata) """
     table.remove_rows(0)
 
 
@@ -257,3 +269,10 @@ def postprocess_filepath(filepath: str):
 def preprocess_filtration(filtration: str):
     """ removes whitespace for pytables compatibility """
     return "".join(filtration.split())
+
+def process_region(filepath, filtration, region_index):
+    """ applies filtration to the specified region of the given image """
+    return (region_index, {
+        "region_index_target": -1,
+        "filtration_status": filtration(Image(filepath).get_region(region_index))
+    })
