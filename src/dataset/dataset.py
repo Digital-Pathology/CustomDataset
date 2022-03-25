@@ -25,6 +25,7 @@ from .util import listdir_recursive
 
 # TODO - add behavior for unlabeled dataset
 
+
 class Dataset(PyTorchDataset):
 
     """
@@ -37,8 +38,8 @@ class Dataset(PyTorchDataset):
                  augmentation: Union[albumentations.BasicTransform,
                                      albumentations.Compose, None] = None,
                  filtration: Union[Filter, FilterManager, None] = None,
-                 filtration_cache: Union[str, FiltrationCache, None] = \
-                     config.DEFAULT_FILTRATION_CACHE_FILEPATH,
+                 filtration_cache: Union[str, FiltrationCache, None] =
+                 config.DEFAULT_FILTRATION_CACHE_FILEPATH,
                  region_dims: tuple = config.REGION_DIMS):
         """
             Initialize Custom Dataset Object.
@@ -90,7 +91,8 @@ class Dataset(PyTorchDataset):
             self.filtration_cache = filtration_cache
             if isinstance(self.filtration_cache, str):
                 self.filtration_cache = \
-                    FiltrationCache(self.filtration_cache, region_dims=region_dims)
+                    FiltrationCache(self.filtration_cache,
+                                    region_dims=region_dims)
             elif isinstance(self.filtration_cache, FiltrationCache):
                 if region_dims != self.filtration_cache.region_dims:
                     raise Exception(
@@ -100,8 +102,8 @@ class Dataset(PyTorchDataset):
                 raise TypeError(type(self.filtration_cache))
 
     def _initialize_augmentation(self,
-                                 augmentation: \
-                                    Union[albumentations.BasicTransform, albumentations.Compose, None]):
+                                 augmentation:
+                                 Union[albumentations.BasicTransform, albumentations.Compose, None]):
         self.augmentation = augmentation
 
     def _initialize_region_counts(self):
@@ -128,7 +130,8 @@ class Dataset(PyTorchDataset):
     def _preprocess_images(self):
         for i, image in enumerate(self._filepaths):
             print(f"Preprocessing {i}/{len(self._filepaths)} {image}")
-            self.filtration_cache.preprocess(self.filtration, image, overwrite=False)
+            self.filtration_cache.preprocess(
+                self.filtration, image, overwrite=False)
 
     def __len__(self):
         return self._length

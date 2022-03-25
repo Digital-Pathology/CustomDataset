@@ -12,7 +12,7 @@ import os
 from typing import Any, Callable
 
 from . import config
-from .util import listdir_recursive, path_without_basename, get_label_from_path
+from .util import listdir_recursive, path_without_basename
 
 
 class LabelManager:
@@ -30,7 +30,7 @@ class LabelManager:
                                 - json file {filename: label}
                                 - csv (no header!)
                                 - directory (label is image's relative path to parent_dir)
-            
+
                 Optional kwargs
 
                     label_extractor (LabelExtractor): overrides automatic selection

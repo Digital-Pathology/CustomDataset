@@ -25,6 +25,7 @@ from . import config
 
 # TODO - parameterize region dimensions
 
+
 class FiltrationCache(AbstractContextManager):
 
     """
@@ -48,8 +49,10 @@ class FiltrationCache(AbstractContextManager):
     ]
 
     def __init__(self,
-                 h5filepath: Union[str, None] = config.DEFAULT_FILTRATION_CACHE_FILEPATH,
-                 h5filetitle: Union[str, None] = config.DEFULAT_FILTRATION_CACHE_TITLE,
+                 h5filepath: Union[str,
+                                   None] = config.DEFAULT_FILTRATION_CACHE_FILEPATH,
+                 h5filetitle: Union[str,
+                                    None] = config.DEFULAT_FILTRATION_CACHE_TITLE,
                  region_dims: tuple = config.REGION_DIMS) -> None:
         """
             FiltrationCache init - opens the h5file which cannot be used otherwise while open here
@@ -134,7 +137,8 @@ class FiltrationCache(AbstractContextManager):
             table.attrs["_image_size"] = Image(filepath).dims
             table.attrs["_image_region_count"] = len(records)
             table.attrs["_image_dark_regions_count"] = dark_regions_total
-            table.attrs["_image_regions_discounted"] = len(records) - dark_regions_total
+            table.attrs["_image_regions_discounted"] = len(
+                records) - dark_regions_total
             table.attrs["_image_region_dims"] = self.region_dims
             table.flush()
 
@@ -145,7 +149,7 @@ class FiltrationCache(AbstractContextManager):
         else:
             group = self._get_group(filtration)
             table = self._get_table(group, filepath)
-            return {f:table.attrs[f] for f in FiltrationCache.metadata_fields}
+            return {f: table.attrs[f] for f in FiltrationCache.metadata_fields}
 
     def _get_group(self, filtration: str, create_if_missing: bool = True) -> pt.Group:
         """
@@ -157,15 +161,15 @@ class FiltrationCache(AbstractContextManager):
         filtration = preprocess_filtration(filtration)
         group = None
         if filtration not in self.h5file.root:
-            if create_if_missing: \
+            if create_if_missing:
                 group = self.h5file.create_group("/", filtration, filtration)
         else:
             group = self.h5file.root.__getattr__(filtration)
         return group
 
-    def _get_table(self, 
-                   group: pt.Group, 
-                   filepath: str, 
+    def _get_table(self,
+                   group: pt.Group,
+                   filepath: str,
                    create_if_missing: bool = True) -> pt.Table:
         """
             returns the table associated with basename(filepath) under group (creates it if needed)
@@ -176,7 +180,7 @@ class FiltrationCache(AbstractContextManager):
         filepath = preprocess_filepath(filepath)
         table = None
         if filepath not in group:
-            if create_if_missing: \
+            if create_if_missing:
                 table = self.h5file.create_table(group, os.path.basename(
                     filepath), FiltrationCache.Description, os.path.basename(filepath))
         else:
@@ -193,11 +197,13 @@ class FiltrationCache(AbstractContextManager):
     def __exit__(self, *args, **kwagrs):
         self.__del__()
 
+
 def preprocess(filtration, filepath):
     """ returns a mapping of region index to (fitration status and dark-region-mapped region index) """
     records, dark_regions_total = _apply_filtration_to_regions(filtration, filepath)
     _apply_dark_region_mapping(records, dark_regions_total)
     return records, dark_regions_total
+
 
 def _apply_filtration_to_regions(filtration, filepath: str) -> Tuple[Dict[int, Dict], int]:
     """ returns a dictionary mapping region_index to filtration_status """
@@ -225,6 +231,7 @@ def _apply_filtration_to_regions(filtration, filepath: str) -> Tuple[Dict[int, D
             dark_regions_total += 1
     return records, dark_regions_total
 
+
 def _apply_dark_region_mapping(records: dict, dark_regions_total: int) -> None:
     discounted_size = len(records) - dark_regions_total
     i = 0
@@ -245,17 +252,21 @@ def _apply_dark_region_mapping(records: dict, dark_regions_total: int) -> None:
             records[i]["region_index_target"] = i
         i += 1
 
+
 def clear_table(table: pt.Table) -> None:
     """ clears a pytables table of all contents (currently leaves metadata) """
     table.remove_rows(0)
+
 
 def preprocess_filepath(filepath: str):
     """ pytables can't handle certain characters """
     return os.path.basename(filepath).replace('.', '_DOTSYMBOL_')
 
+
 def postprocess_filepath(filepath: str):
     """ pytables can't handle certain characters """
     return filepath.replace('_DOTSYMBOL_', '.')
+
 
 def preprocess_filtration(filtration: str):
     """ removes whitespace for pytables compatibility """
