@@ -150,7 +150,7 @@ class Dataset(PyTorchDataset):
         """
         image, region_num = self.get_region_location_from_index(index)
         label = self.label_manager[image]
-        region = Image(image).get_region(region_num)
+        region = self.get_region(image, region_num)
         region = self.augment_region(region)
         return region, label
 
@@ -181,6 +181,22 @@ class Dataset(PyTorchDataset):
         """ returns the label associated with a certain filename """
         # TODO - add expansion for region-specific labels?
         return self.label_manager[filename]
+    
+    def get_region(self, filename, region_num):
+        """ returns the region at location region num in filename,
+        applying filtration and filtration cache if necessary"""
+        if self.filtration is None:
+            pass # region num is exactly what it seems like
+        else: # check filtration cache for proper target region
+            print(region_num)
+            region_num = int(self.filtration_cache.get_status(
+                self.filtration,
+                filename,
+                region_num
+            )[1])
+            print(region_num)
+        return Image(filename).get_region(region_num)
+
 
     def get_label_distribution(self):
         """ gives the count of regions belonging to each label -
