@@ -10,11 +10,9 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
-import enum
 from multiprocessing import Pool
 import os
 from typing import Dict, Iterable, Tuple, Union
-from pkg_resources import yield_lines
 
 import tables as pt
 
