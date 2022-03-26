@@ -87,7 +87,8 @@ class FiltrationCache(AbstractContextManager):
             return table.read()
         elif isinstance(region_index, Iterable):
             raise NotImplementedError(region_index)
-        elif region_index == int(region_index): # handles most library integer types
+        # handles most library integer types
+        elif region_index == int(region_index):
             return table[region_index]
         else:
             raise TypeError(type(region_index))
@@ -201,7 +202,8 @@ class FiltrationCache(AbstractContextManager):
 
 def preprocess(filtration, filepath):
     """ returns a mapping of region index to (fitration status and dark-region-mapped region index) """
-    records, dark_regions_total = _apply_filtration_to_regions(filtration, filepath)
+    records, dark_regions_total = _apply_filtration_to_regions(
+        filtration, filepath)
     _apply_dark_region_mapping(records, dark_regions_total)
     return records, dark_regions_total
 
@@ -215,10 +217,12 @@ def _apply_filtration_to_regions(filtration, filepath: str) -> Tuple[Dict[int, D
     try:
         pool = Pool()
         # TODO - region dims not parameterized here
+
         def info_generator():
             for region_index in range(img.number_of_regions()):
                 yield (filepath, filtration, region_index)
-        records = {i: r for i,r in pool.starmap(process_region, info_generator())}
+        records = {i: r for i, r in pool.starmap(
+            process_region, info_generator())}
     finally:
         pool.close()
         print("pool closed, joining")
@@ -272,6 +276,7 @@ def postprocess_filepath(filepath: str):
 def preprocess_filtration(filtration: str):
     """ removes whitespace for pytables compatibility """
     return "".join(filtration.split())
+
 
 def process_region(filepath, filtration, region_index):
     """ applies filtration to the specified region of the given image """

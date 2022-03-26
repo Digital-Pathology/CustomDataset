@@ -186,8 +186,8 @@ class Dataset(PyTorchDataset):
         """ returns the region at location region num in filename,
         applying filtration and filtration cache if necessary"""
         if self.filtration is None:
-            pass # region num is exactly what it seems like
-        else: # check filtration cache for proper target region
+            pass  # region num is exactly what it seems like
+        else:  # check filtration cache for proper target region
             #print(region_num, type(region_num))
             region_num = int(self.filtration_cache.get_status(
                 self.filtration,
