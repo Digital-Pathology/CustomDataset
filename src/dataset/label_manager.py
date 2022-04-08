@@ -1,128 +1,102 @@
+
 """
-label formats to support:
-1) simple json
-2) two-line txt files or csv???
-3) directory structure
+    Label inference for the custom dataset
 """
 
-import abc
-import csv
-import json
+from __future__ import annotations
+
 import os
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
-from . import config
-from .util import listdir_recursive, path_without_basename
+from . import label_extractor
+from . import util
 
 
 class LabelManager:
     """
-    A dictionary wrapper for managing labels
+     A dictionary wrapper for managing labels
+
+    :raises NotImplementedError: when a given file extension cannot be parsed natively
+    :raises TypeError: when the label_extractor isn't a LabelExtractor
+    :raises TypeError: when label_preprocessor isn't Callable
+    :raises TypeError: when label_postprocessor isn't Callable
+    :raises IndexError: when a key doesn't have a value
     """
 
-    def __init__(self, path: str, **kwargs) -> None:
+    def __init__(self,
+                 path: util.FilePath,
+                 label_extraction: Optional[label_extractor.LabelExtractor] = None,
+                 label_preprocessor: Optional[Callable] = None,
+                 label_postprocessor: Optional[Callable] = None,
+                 error_if_no_labels: bool = True) -> None:
         """
-            Initialize a LabelManager
+        __init__ initializes a LabelManager
 
-                Parameters
-
-                    path (str): a path to the location of the labels - could be:
-                                - json file {filename: label}
-                                - csv (no header!)
-                                - directory (label is image's relative path to parent_dir)
-
-                Optional kwargs
-
-                    label_extractor (LabelExtractor): overrides automatic selection
-                    label_preprocessor (Callable): allows user to preprocess key for label lookup
-                    label_postprocessor (Callable): allows user to postprocess label inside LabelManager
+        :param path: A filepath from where labels can be inferred
+        :type path: util.FilePath
+        :param label_extractor: how labels are parsed (if None, uses file extension), defaults to None
+        :type label_extractor: Optional[LabelExtractor], optional
+        :param label_preprocessor: a function for preprocessing the key used to get the label, defaults to None
+        :type label_preprocessor: Optional[Callable], optional
+        :param label_postprocessor: a function for postprocessing labels after they are indexed, defaults to None
+        :type label_postprocessor: Optional[Callable], optional
+        :param error_if_no_labels: whether LabelManager should throw IndexError, defaults to True
+        :type error_if_no_labels: bool, optional
+        :raises util.UnsupportedFileType: when a given file extension cannot be parsed natively
+        :raises TypeError: when the label_extractor isn't a LabelExtractor
+        :raises TypeError: when label_preprocessor isn't Callable
+        :raises TypeError: when label_postprocessor isn't Callable
         """
 
         super().__init__()
 
-        # get label extractor or choose based on path
-        self.label_extractor = kwargs.get("label_extractor")
-        if self.label_extractor is None:
+        # get labels with a LabelExtractor
+        if label_extraction is None:
             if path.endswith(".json"):
-                self.label_extractor = LabelExtractorJSON()
+                label_extraction = label_extractor.LabelExtractorJSON()
             elif path.endswith(".csv"):
-                self.label_extractor = LabelExtractorCSV()
+                label_extraction = label_extractor.LabelExtractorCSV()
             elif os.path.isdir(path):
-                self.label_extractor = LabelExtractorParentDir()
+                label_extraction = label_extractor.LabelExtractorParentDir()
             else:
-                raise NotImplementedError(
-                    f'We do not support the current file extension: {path=}')
+                raise util.UnsupportedFileType(
+                    f'We do not support that file extension: {path=}')
         else:
-            if not isinstance(self.label_extractor, LabelExtractor):
-                raise TypeError(type(self.label_extractor))
-
-        # get labels from label_extractor
-        self.labels = self.label_extractor.extract_labels(path, **kwargs)
+            if not isinstance(label_extraction, label_extractor.LabelExtractor):
+                raise TypeError(type(label_extraction))
+        self.labels = label_extraction.extract_labels(path)
 
         # label preprocessing
         #   user can have the path of the file preprocessed before indexing the extracted labels
-        self.label_preprocessor = kwargs.get("label_preprocessor")
+        self.label_preprocessor = label_preprocessor
         if self.label_preprocessor is not None and not isinstance(
                 self.label_preprocessor, Callable):
             raise TypeError(self.label_preprocessor)
 
         # label postprocessor
         #   user can have the extracted label postprocessed inside the label manager
-        self.label_postprocessor = kwargs.get("label_postprocessor")
+        self.label_postprocessor = label_postprocessor
         if self.label_postprocessor is not None and not isinstance(
                 self.label_postprocessor, Callable):
             raise TypeError(type(self.label_postprocessor))
-        self.error_if_no_label = kwargs.get(
-            "error_if_no_label") or config.LABEL_MANAGER_IF_NO_LABEL
+        self.error_if_no_label = error_if_no_labels
 
     def __getitem__(self, key: str) -> Any:
+        """
+        __getitem__ indexes the label manager's labels
+
+        :param key: the key of the label to index
+        :type key: str
+        :raises IndexError: when the key does not have a corresponding value (if self.error_if_no_label)
+        :return: the label
+        :rtype: Any
+        """
         # preprocess if applicable
         if self.label_preprocessor is not None:
             key = self.label_preprocessor(key)
         label = self.labels.get(key)
         # postprocess if applicable
-        if self.label_postprocessor is not None:
-            label = self.label_postprocessor(label)
-        if label is None:
+        if label is None and self.error_if_no_label:
             raise IndexError(key)
+        label = self.label_postprocessor(label)
         return label
-
-
-class LabelExtractor(abc.ABC):  # strategy pattern
-    """ Strategy Pattern --> extracts labels from path for dictionary-based lookup """
-
-    @staticmethod
-    @abc.abstractmethod
-    def extract_labels(path: str, **kwargs):
-        """ extracts labels from path for dictionary-based lookup """
-
-
-class LabelExtractorJSON(LabelExtractor):
-    """ labels in json file """
-
-    @staticmethod
-    def extract_labels(path: str, **kwargs):
-        """ labels are inside of a json file at path of structure {key: label, ...} """
-        with open(path, 'r', encoding='utf-8') as file:
-            return json.load(file)
-
-
-class LabelExtractorCSV(LabelExtractor):
-    """ labels in csv file """
-
-    @staticmethod
-    def extract_labels(path: str, **kwargs):
-        """ labels are inside of a csv file at path of structure (each line) <key><sep><label> """
-        with open(path, 'r', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            return {row[0]: row[1] for row in reader}
-
-
-class LabelExtractorParentDir(LabelExtractor):
-    """ labels represented by relative path """
-
-    @staticmethod
-    def extract_labels(path: str, **kwargs):
-        """ labels are path relative to path arg (label_postprocessor recommended) """
-        files = listdir_recursive(path)
-        return {f: path_without_basename(f) for f in files}

@@ -1,38 +1,43 @@
 
 """
-    filtration_cacheing
-
-        A system for caching information about which regions of an image pass through a filter.
-        Includes metadata verification and context management.
-        See example use of FiltrationCacheManager
+    A system for caching information about which regions of an image pass through a filter.
+    Includes metadata verification and context management.
 """
 
 from __future__ import annotations
 
+# stdlib imports
 from contextlib import AbstractContextManager
 from multiprocessing import Pool
 import os
-from typing import Dict, Iterable, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
+# pip imports
 import tables as pt
-import numpy as np
 
-from unified_image_reader import Image
+# in-house imports
+import unified_image_reader
 
-from .util import listdir_recursive
+# local imports
+from . import util
 from . import config
 
-# TODO - parameterize region dimensions
+
+# TODO - This class is too big and should be aggregating a wrapper on the pytables functionality
 
 
 class FiltrationCache(AbstractContextManager):
-
     """
-        Tracks images' regions' filtration statuses in a PyTables hdf5 database
+    FiltrationCache Tracks images' regions' filtration statuses in a PyTables hdf5 database
+
+    :raises NotImplementedError: when region_index is region coordinates instead
+    :raises TypeError: when region_index is of the wrong type
     """
 
     class Description(pt.IsDescription):
-        """ the structure for tables in the database """
+        """
+        Description - the structure for tables in the database
+        """
         region_index_base = pt.IntCol(pos=0)  # region index
         region_index_target = pt.IntCol(pos=1)  # region it maps to
         # filtration status of region index base
@@ -48,17 +53,18 @@ class FiltrationCache(AbstractContextManager):
     ]
 
     def __init__(self,
-                 h5filepath: Union[str,
-                                   None] = config.DEFAULT_FILTRATION_CACHE_FILEPATH,
-                 h5filetitle: Union[str,
-                                    None] = config.DEFULAT_FILTRATION_CACHE_TITLE,
-                 region_dims: tuple = config.REGION_DIMS) -> None:
+                 h5filepath: Optional[util.FilePath] = config.DEFAULT_FILTRATION_CACHE_FILEPATH,
+                 h5filetitle: Optional[str] = config.DEFULAT_FILTRATION_CACHE_TITLE,
+                 region_dims: Optional[unified_image_reader.util.RegionDimensions] = config.REGION_DIMS) -> None:
         """
-            FiltrationCache init - opens the h5file which cannot be used otherwise while open here
+        __init__ initializes FiltrationCache
 
-            h5filepath (str): the path to the file the database should be stored in
-                                (default filtration_cache.h5)
-            h5filetitle (str): a name for the database (default filtration_cache)
+        :param h5filepath: the path to the file the database should be stored in, defaults to config.DEFAULT_FILTRATION_CACHE_FILEPATH
+        :type h5filepath: Optional[util.FilePath], optional
+        :param h5filetitle: a name for the database, defaults to config.DEFULAT_FILTRATION_CACHE_TITLE
+        :type h5filetitle: Optional[str], optional
+        :param region_dims: dimensions of the regions for which to cache filtration statuses, defaults to config.REGION_DIMS
+        :type region_dims: Optional[unified_image_reader.util.RegionDimensions], optional
         """
         # save parameters
         self.h5filepath = h5filepath
@@ -70,30 +76,47 @@ class FiltrationCache(AbstractContextManager):
         self.h5file = pt.open_file(
             self.h5filepath, mode=self.h5file_openmode, title=self.h5filetitle)
 
-    def get_status(self, filtration, filepath, region_index: Union[int, Iterable, None] = None):
+    def get_status(self,
+                   filtration: Union[util.FiltrationRepr, str],
+                   filepath: util.FilePath,
+                   region_index: Optional[unified_image_reader.util.RegionIndex] = None) -> util.FiltrationReprStatus:
         """
-            Gets one or all records from table for filtration, os.path.basename(filepath)
+        get_status gets one or all records from table for filtration, os.path.basename(filepath)
 
-            filtration (str): a string representing the filtration applied to the image
-            filepath (str): a filepath representing the image filtration was applied to
-            region_index_base (int, Iterable(list, tuple, etc.), None): a number representing
-                                                                the region of the image filtration
-                                                                was applied to (None gets all
-                                                                records)
+        :param filtration: a string representing the filtration applied to the image
+        :type filtration: Union[util.FiltrationRepr, str]
+        :param filepath: a filepath representing the image filtration was applied to
+        :type filepath: util.FilePath
+        :param region_index: the index of the region in question, defaults to None
+        :type region_index: Optional[util.RegionIndex], optional
+        :raises NotImplementedError: if region_index is coordinates
+        :raises TypeError: if region_index is of the wrong type
+        :return: a tuple of (region index, target region index, region index filtration status)
+        :rtype: util.FiltrationReprStatus
         """
         group = self._get_group(filtration)
         table = self._get_table(group, filepath)
         if region_index is None:  # get all
             return table.read()
-        elif isinstance(region_index, Iterable):
+        elif isinstance(region_index, unified_image_reader.util.RegionCoordinates):
             raise NotImplementedError(region_index)
-        elif region_index == int(region_index): # handles most library integer types
+        # handles most library integer types
+        elif region_index == int(region_index):
             return table[region_index]
         else:
-            raise TypeError(type(region_index))
+            raise TypeError(f"{type(region_index)=}, {region_index=}")
 
-    def has_data(self, filtration, filepath) -> bool:
-        """ checks if the filtrationcache has a table at filtration/filepath """
+    def has_data(self, filtration: util.FiltrationRepr, filepath: util.FilePath) -> bool:
+        """
+        has_data checks if the filtrationcache has a table at filtration/filepath
+
+        :param filtration: the filtration for which statuses are checked
+        :type filtration: util.FiltrationRepr
+        :param filepath: a key for the image in question
+        :type filepath: util.FilePath
+        :return: whether the FiltrationCache has the data in question
+        :rtype: bool
+        """
         group = self._get_group(filtration, create_if_missing=False)
         if group is None:
             return False
@@ -102,15 +125,19 @@ class FiltrationCache(AbstractContextManager):
             return False
         return True
 
-    def preprocess(self, filtration, filepath, overwrite: bool = True) -> None:
+    def preprocess(self, filtration: util.FiltrationRepr, filepath: util.FilePath, overwrite: bool = True) -> None:
         """
-            Applies filtration to image(s) at filepath (listdir recursive)
+        preprocess applies filtration to image(s) at filepath (listdir recursive)
 
-            filtration: filtration applied to images' regions'
-            filepath (str): if a directory, applied to all files in directory
+        :param filtration: filtration applied to images' regions'
+        :type filtration: util.FiltrationRepr
+        :param filepath: if a directory, applied to all files in directory
+        :type filepath: util.FilePath
+        :param overwrite: whether to overwrite existing data, if applicable, defaults to True
+        :type overwrite: bool, optional
         """
         if os.path.isdir(filepath):  # is directory of image files
-            filepaths = listdir_recursive(filepath)
+            filepaths = util.listdir_recursive(filepath)
             for f in filepaths:
                 self.preprocess(filtration, f)
         else:  # is image file
@@ -125,7 +152,8 @@ class FiltrationCache(AbstractContextManager):
                     clear_table(table)
                     for key in FiltrationCache.metadata_fields:
                         del table.attrs[key]
-            records, dark_regions_total = preprocess(filtration, filepath)
+            records, dark_regions_total = preprocess(
+                filtration, filepath, self.region_dims)
             group = self._get_group(filtration)
             table = self._get_table(group, filepath)
             row = table.row
@@ -135,7 +163,8 @@ class FiltrationCache(AbstractContextManager):
                 row["filtration_status"] = records[i]["filtration_status"]
                 row.append()
             table.attrs["_image_filepath"] = os.path.basename(filepath)
-            table.attrs["_image_size"] = Image(filepath).dims
+            table.attrs["_image_size"] = unified_image_reader.Image(
+                filepath).dims
             table.attrs["_image_region_count"] = len(records)
             table.attrs["_image_dark_regions_count"] = dark_regions_total
             table.attrs["_image_regions_discounted"] = len(
@@ -143,8 +172,17 @@ class FiltrationCache(AbstractContextManager):
             table.attrs["_image_region_dims"] = self.region_dims
             table.flush()
 
-    def get_metadata(self, filtration, filepath) -> Union[int, None]:
-        """ the metadata for a table if it exists """
+    def get_metadata(self, filtration: util.FiltrationRepr, filepath: util.FilePath) -> util.FiltrationCacheMetadata:
+        """
+        get_metadata gets the metadata for a table if it exists
+
+        :param filtration: the filtration for which to get metadata
+        :type filtration: util.FiltrationRepr
+        :param filepath: the image for which to get metadata
+        :type filepath: util.FilePath
+        :return: the metadata in question, if available
+        :rtype: util.FiltrationCacheMetadata
+        """
         if not self.has_data(filtration, filepath):
             return None
         else:
@@ -152,9 +190,19 @@ class FiltrationCache(AbstractContextManager):
             table = self._get_table(group, filepath)
             return {f: table.attrs[f] for f in FiltrationCache.metadata_fields}
 
-    def _get_group(self, filtration: str, create_if_missing: bool = True) -> pt.Group:
+    def _get_group(self, filtration: util.FiltrationRepr, create_if_missing: bool = True) -> Optional[pt.Group]:
         """
-            returns the group representing the filtration (creates it if needed)
+        _get_group returns the group representing the filtration (creates it if needed)
+
+        :param filtration: the filtration in question
+        :type filtration: util.FiltrationRepr
+        :param create_if_missing: whether to create the group if it doesn't exist, defaults to True
+        :type create_if_missing: bool, optional
+        :return: the group in question
+        :rtype: Optional[pt.Group]
+        """
+        """
+            
 
             filtration (str): a string representing the applied filtration
         """
@@ -170,13 +218,19 @@ class FiltrationCache(AbstractContextManager):
 
     def _get_table(self,
                    group: pt.Group,
-                   filepath: str,
-                   create_if_missing: bool = True) -> pt.Table:
+                   filepath: util.FilePath,
+                   create_if_missing: bool = True) -> Optional[pt.Table]:
         """
-            returns the table associated with basename(filepath) under group (creates it if needed)
+        _get_table returns the table associated with basename(filepath) under group (creates it if needed)
 
-            group (pt.Group): the group the table should belong to
-            filepath (str): filepath basename points to an image file.
+        :param group: the group the table should belong to
+        :type group: pt.Group
+        :param filepath: filepath basename points to an image file
+        :type filepath: util.FilePath
+        :param create_if_missing: whether to create the table if it doesn't exist, defaults to True
+        :type create_if_missing: bool, optional
+        :return: the table in question
+        :rtype: Optional[pt.Table]
         """
         filepath = preprocess_filepath(filepath)
         table = None
@@ -189,36 +243,70 @@ class FiltrationCache(AbstractContextManager):
         return table
 
     def __del__(self):
-        """ ensures the file is closed after use - very important! context management is recommended """
+        """
+        __del__ ensures the file is closed after use - very important! context management is recommended
+        """
         self.h5file.close()
 
-    def __enter__(self, *args, **kwargs):
-        return self
-
     def __exit__(self, *args, **kwagrs):
+        """
+        __exit__ enforces safe deconstruction on exiting context
+        """
         self.__del__()
 
 
-def preprocess(filtration, filepath):
-    """ returns a mapping of region index to (fitration status and dark-region-mapped region index) """
-    records, dark_regions_total = _apply_filtration_to_regions(filtration, filepath)
+def preprocess(filtration: util.FiltrationRepr, filepath: util.FilePath, region_dims: unified_image_reader.util.RegionDimensions) -> Tuple[Dict[int, util.FiltrationStatus], int]:
+    """
+    preprocess returns a mapping of region index to (fitration status and dark-region-mapped region index)
+
+    :param filtration: the filtration to apply to the image's regions
+    :type filtration: util.FiltrationRepr
+    :param filepath: the filepath where the image in question is found
+    :type filepath: util.FilePath
+    :param region_dims: the dimensions of the regions to which filtration is applied
+    :type region_dims: unified_image_reader.util.RegionDimensions
+    :return: filtration status records and dark region count
+    :rtype: Tuple[Dict[int, util.FiltrationStatus], int]
+    """
+    records, dark_regions_total = _apply_filtration_to_regions(
+        filtration, filepath, region_dims)
     _apply_dark_region_mapping(records, dark_regions_total)
     return records, dark_regions_total
 
 
-def _apply_filtration_to_regions(filtration, filepath: str) -> Tuple[Dict[int, Dict], int]:
-    """ returns a dictionary mapping region_index to filtration_status """
-    img = Image(filepath)
+def _apply_filtration_to_regions(filtration: util.FiltrationRepr, filepath: util.FilePath, region_dims: unified_image_reader.util.RegionDimensions) -> Tuple[Dict[int, util.FiltrationStatus], int]:
+    """
+    _apply_filtration_to_regions returns a dictionary mapping region_index to filtration_status
+
+    :param filtration: the filtration to apply to the image's regions
+    :type filtration: util.FiltrationRepr
+    :param filepath: the filepath where the image in question is found
+    :type filepath: util.FilePath
+    :param region_dims: the dimensions of the regions to which filtration is applied
+    :type region_dims: unified_image_reader.util.RegionDimensions
+    :raises Exception: if there are no regions in the image of size region_dims
+    :raises Exception: if there was an issue with the gathering filtration status into the records struct
+    :return: filtration status records and dark region count
+    :rtype: Tuple[Dict[int, util.FiltrationStatus], int]
+    """
+    img = unified_image_reader.Image(filepath)
     if img.number_of_regions() == 0:
-        raise Exception(f"no regions of size 512,512 in {filepath=}")
+        raise Exception(f"no regions of size {region_dims=} in {filepath=}")
     records = None
     try:
         pool = Pool()
-        # TODO - region dims not parameterized here
+
         def info_generator():
-            for region_index in range(img.number_of_regions()):
-                yield (filepath, filtration, region_index)
-        records = {i: r for i,r in pool.starmap(process_region, info_generator())}
+            """
+            info_generator is a generator for iterating through the regions
+
+            :yield: the information necessary
+            :rtype: int
+            """
+            for region_index in range(img.number_of_regions(region_dims)):
+                yield (filepath, filtration, region_index, region_dims)
+        records = {i: r for i, r in pool.starmap(
+            process_region, info_generator())}
     finally:
         pool.close()
         print("pool closed, joining")
@@ -233,7 +321,15 @@ def _apply_filtration_to_regions(filtration, filepath: str) -> Tuple[Dict[int, D
     return records, dark_regions_total
 
 
-def _apply_dark_region_mapping(records: dict, dark_regions_total: int) -> None:
+def _apply_dark_region_mapping(records: Dict[int, util.FiltrationStatus], dark_regions_total: int) -> None:
+    """
+    _apply_dark_region_mapping applies the dark region mapping algorithm to the records in-place
+
+    :param records: the records to which dark region is applied
+    :type records: Dict[int, util.FiltrationStatus]
+    :param dark_regions_total: the total number of dark regions among the records
+    :type dark_regions_total: int
+    """
     discounted_size = len(records) - dark_regions_total
     i = 0
     dark_regions_passed = 0
@@ -255,27 +351,59 @@ def _apply_dark_region_mapping(records: dict, dark_regions_total: int) -> None:
 
 
 def clear_table(table: pt.Table) -> None:
-    """ clears a pytables table of all contents (currently leaves metadata) """
+    """
+    clear_table clears a pytables table of all contents (currently leaves metadata)
+
+    :param table: the table to clear
+    :type table: pt.Table
+    """
     table.remove_rows(0)
 
 
-def preprocess_filepath(filepath: str):
-    """ pytables can't handle certain characters """
+def preprocess_filepath(filepath: util.FilePath) -> str:
+    """
+    preprocess_filepath pytables can't handle certain characters
+
+    :param filepath: the filepath to preprocess
+    :type filepath: util.FilePath
+    :return: a filepath more coherent to pytables's restrictions
+    :rtype: str
+    """
     return os.path.basename(filepath).replace('.', '_DOTSYMBOL_')
 
 
-def postprocess_filepath(filepath: str):
-    """ pytables can't handle certain characters """
+def postprocess_filepath(filepath: util.FilePath) -> str:  # TODO - new type for this
+    """
+    postprocess_filepath undoes the preprocessing
+
+    :param filepath: the filepath to un-preprocess
+    :type filepath: util.FilePath
+    :return: the natural filepath
+    :rtype: str
+    """
     return filepath.replace('_DOTSYMBOL_', '.')
 
 
-def preprocess_filtration(filtration: str):
-    """ removes whitespace for pytables compatibility """
-    return "".join(filtration.split())
+def preprocess_filtration(filtration: util.FiltrationRepr) -> util.FiltrationRepr:
+    """
+    preprocess_filtration removes whitespace for pytables compatibility
 
-def process_region(filepath, filtration, region_index):
-    """ applies filtration to the specified region of the given image """
+    :param filtration: the filtration to represent
+    :type filtration: util.FiltrationRepr
+    :return: a pytables-agreeable filtration representation
+    :rtype: util.FiltrationRepr
+    """
+    return "".join(str(filtration).split())
+
+
+def process_region(filepath: util.FilePath, filtration: util.FiltrationRepr, region_index: unified_image_reader.util.RegionIndex, region_dims: util.RegionDimensions) -> Tuple[int, Dict[str: Any]]:
+    """
+    process_region applies filtration to the specified region of the given image
+
+    :return: the region index and the filtration status
+    :rtype: Tuple[int, Dict[str: Any]]
+    """
     return (region_index, {
         "region_index_target": -1,
-        "filtration_status": filtration(Image(filepath).get_region(region_index))
+        "filtration_status": filtration(unified_image_reader.Image(filepath).get_region(region_index, region_dims))
     })
