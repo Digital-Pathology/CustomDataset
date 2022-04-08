@@ -212,7 +212,7 @@ class Dataset(PyTorchDataset):
         return label_distribution
 
     def iterate_by_file(self):
-        """
+        """ 
         dataset = Dataset()
         for (filename, label, regions) in dataset.iterate_by_file():
             regions = list(regions)
