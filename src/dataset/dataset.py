@@ -210,3 +210,16 @@ class Dataset(PyTorchDataset):
             if self.filtration:
                 label_distribution[label] -= self._region_discounts[image]
         return label_distribution
+
+    def iterate_by_file(self):
+        """
+        dataset = Dataset()
+        for (filename, label, regions) in dataset.iterate_by_file():
+            regions = list(regions)
+            continue
+        """
+        def regions_generator(filename):
+            for i in range(self._region_counts[filename] - self._region_discounts[filename]):
+                yield self.get_region(filename, i)
+        for filename in self._filepaths:
+            yield filename, self.get_label(filename), regions_generator(filename)
