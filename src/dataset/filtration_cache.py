@@ -10,7 +10,7 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from multiprocessing import Pool
 import os
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 # pip imports
 import tables as pt
@@ -79,7 +79,7 @@ class FiltrationCache(AbstractContextManager):
     def get_status(self,
                    filtration: Union[util.FiltrationRepr, str],
                    filepath: util.FilePath,
-                   region_index: Optional[unified_image_reader.util.RegionIndex] = None) -> util.FiltrationReprStatus:
+                   region_index: Optional[unified_image_reader.util.RegionIndex] = None) -> util.FiltrationStatus:
         """
         get_status gets one or all records from table for filtration, os.path.basename(filepath)
 
@@ -98,7 +98,7 @@ class FiltrationCache(AbstractContextManager):
         table = self._get_table(group, filepath)
         if region_index is None:  # get all
             return table.read()
-        elif isinstance(region_index, unified_image_reader.util.RegionCoordinates):
+        elif isinstance(region_index, Iterable):
             raise NotImplementedError(region_index)
         # handles most library integer types
         elif region_index == int(region_index):
@@ -200,11 +200,6 @@ class FiltrationCache(AbstractContextManager):
         :type create_if_missing: bool, optional
         :return: the group in question
         :rtype: Optional[pt.Group]
-        """
-        """
-            
-
-            filtration (str): a string representing the applied filtration
         """
         filtration = str(filtration)
         filtration = preprocess_filtration(filtration)

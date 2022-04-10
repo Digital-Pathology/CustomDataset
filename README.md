@@ -1,5 +1,7 @@
 # CustomDataset
 
+![Tests](https://github.com/Digital-Pathology/CustomDataset/actions/workflows/tests.yml/badge.svg)
+
 ## Dataset Organization
 
 TODO
