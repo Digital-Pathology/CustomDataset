@@ -98,5 +98,6 @@ class LabelManager:
         # postprocess if applicable
         if label is None and self.error_if_no_label:
             raise IndexError(key)
-        label = self.label_postprocessor(label)
+        if self.label_postprocessor is not None:
+            label = self.label_postprocessor(label)
         return label
