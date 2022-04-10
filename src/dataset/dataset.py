@@ -280,7 +280,7 @@ class Dataset(PyTorchDataset):
                 label_distribution[label] -= self._region_discounts[image]
         return label_distribution
 
-    def iterate_by_file(self) -> Generator[Tuple[str, Any, Generator]]:
+    def iterate_by_file(self) -> Generator[Tuple[str, Any, Generator], None, None]:
         """
         iterate_by_file allows for users to iterate over region in an image given the filename and the label
 
@@ -293,7 +293,7 @@ class Dataset(PyTorchDataset):
             regions = list(regions)
             continue
         """
-        def regions_generator(filename: str) -> Generator[np.ndarray]:
+        def regions_generator(filename: str) -> Generator[np.ndarray, None, None]:
             """
             regions_generator iterates over the regions in an image
 
