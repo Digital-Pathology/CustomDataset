@@ -4,7 +4,9 @@
 """
 
 import abc
+from collections import defaultdict
 import csv
+from email.policy import default
 import json
 import os
 
@@ -18,6 +20,17 @@ class LabelExtractor(abc.ABC):  # strategy pattern
     @abc.abstractmethod
     def extract_labels(path: str):
         """ extracts labels from path for dictionary-based lookup """
+
+
+class LabelExtractorNoLabels(LabelExtractor):
+    class DefaultDictWithGet(defaultdict):
+        def get(self, *args, **kwargs):
+            return 'LabelExtractorNoLabels'
+
+    @staticmethod
+    def extract_labels(path: str):
+        """ returns None for all labels """
+        return LabelExtractorNoLabels.DefaultDictWithGet()
 
 
 class LabelExtractorJSON(LabelExtractor):
