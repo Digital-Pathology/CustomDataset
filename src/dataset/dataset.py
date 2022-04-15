@@ -206,9 +206,8 @@ class Dataset(PyTorchDataset):
         :return: the location of the region at dataset[i]
         :rtype: Tuple[str, int]
         """
-        for image, region_count in self._region_counts.items():
-            if self.filtration:
-                region_count -= self._region_discounts[image]
+        for image in self._filepaths:
+            region_count = self.number_of_regions(image)
             if index >= region_count:  # region at index is in another image
                 index -= region_count
             else:
@@ -302,7 +301,13 @@ class Dataset(PyTorchDataset):
             :yield: regions
             :rtype: numpy.ndarray
             """
-            for i in range(self._region_counts[filename] - self._region_discounts[filename]):
+            for i in range(self.number_of_regions(filename)):
                 yield self.get_region(filename, i)
         for filename in self._filepaths:
             yield filename, self.get_label(filename), regions_generator(filename)
+
+    def number_of_regions(self, filename):
+        n = self._region_counts[filename]
+        if self.filtration is not None:
+            n -= self._region_discounts[filename]
+        return n
