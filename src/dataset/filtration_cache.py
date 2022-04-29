@@ -5,6 +5,7 @@
 """
 
 from __future__ import annotations
+from concurrent.futures import process
 
 # stdlib imports
 from contextlib import AbstractContextManager
@@ -288,27 +289,30 @@ def _apply_filtration_to_regions(filtration: util.FiltrationRepr, filepath: util
     if img.number_of_regions() == 0:
         raise Exception(f"no regions of size {region_dims=} in {filepath=}")
     records = None
-    try:
-        pool = Pool()
+    if config.FILTRATION_CACHE_APPLY_FILTRATION_MULTIPROCESSING:
+        try:
+            pool = Pool()
 
-        def info_generator():
-            """
-            info_generator is a generator for iterating through the regions
+            def info_generator():
+                """
+                info_generator is a generator for iterating through the regions
 
-            :yield: the information necessary
-            :rtype: int
-            """
-            for region_index in range(img.number_of_regions(region_dims)):
-                yield (filepath, filtration, region_index, region_dims)
-        records = {i: r for i, r in pool.starmap(
-            process_region, info_generator())}
-    finally:
-        pool.close()
-        print("pool closed, joining")
-        pool.join()
-    print("finished pool:", len(records), img.number_of_regions())
-    if len(records) != img.number_of_regions():
-        raise Exception()
+                :yield: the information necessary
+                :rtype: int
+                """
+                for region_index in range(img.number_of_regions(region_dims)):
+                    yield (filepath, filtration, region_index, region_dims)
+            records = {i: r for i, r in pool.starmap(
+                process_region, info_generator())}
+        finally:
+            pool.close()
+            pool.join()
+        if len(records) == 0 or len(records) != img.number_of_regions():
+            raise Exception(f"{len(records)=}, {img.number_of_regions()=}")
+    else:  # no multiprocessing
+        records = {}
+        for region_index in range(img.number_of_regions()):
+            records[region_index] = process_region(filepath, filtration, region_index, region_dims)[1]
     dark_regions_total = 0
     for record in records.values():
         if record["filtration_status"] is False:
@@ -325,6 +329,12 @@ def _apply_dark_region_mapping(records: Dict[int, util.FiltrationStatus], dark_r
     :param dark_regions_total: the total number of dark regions among the records
     :type dark_regions_total: int
     """
+    if True:
+        print("exporting records")
+        import json
+        fp = f'records-{dark_regions_total}.json'
+        with open(fp, 'w' if os.path.exists(fp) else 'x') as f:
+            json.dump(records, f)
     discounted_size = len(records) - dark_regions_total
     i = 0
     dark_regions_passed = 0
@@ -333,7 +343,9 @@ def _apply_dark_region_mapping(records: Dict[int, util.FiltrationStatus], dark_r
             dark_regions_passed += 1
             temp_count = dark_regions_passed
             j = len(records) - 1
-            while True:
+            if j < 0:
+                raise Exception("no records")
+            while j >= 0:
                 if records[j]["filtration_status"] is True:
                     temp_count -= 1
                     if temp_count == 0:
