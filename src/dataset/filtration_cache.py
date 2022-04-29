@@ -329,12 +329,6 @@ def _apply_dark_region_mapping(records: Dict[int, util.FiltrationStatus], dark_r
     :param dark_regions_total: the total number of dark regions among the records
     :type dark_regions_total: int
     """
-    if True:
-        print("exporting records")
-        import json
-        fp = f'records-{dark_regions_total}.json'
-        with open(fp, 'w' if os.path.exists(fp) else 'x') as f:
-            json.dump(records, f)
     discounted_size = len(records) - dark_regions_total
     i = 0
     dark_regions_passed = 0
