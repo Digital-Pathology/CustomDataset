@@ -312,7 +312,8 @@ def _apply_filtration_to_regions(filtration: util.FiltrationRepr, filepath: util
     else:  # no multiprocessing
         records = {}
         for region_index in range(img.number_of_regions()):
-            records[region_index] = process_region(filepath, filtration, region_index, region_dims)[1]
+            records[region_index] = process_region(
+                filepath, filtration, region_index, region_dims)[1]
     dark_regions_total = 0
     for record in records.values():
         if record["filtration_status"] is False:
