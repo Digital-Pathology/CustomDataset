@@ -325,3 +325,11 @@ class Dataset(PyTorchDataset):
         if self.filtration is not None:
             n -= self._region_discounts[filename]
         return n
+
+    def get_region_labels_as_list(self):
+        region_labels = []
+        for filename in self._filepaths:
+            label = self.get_label(filename)
+            regions_in_filename = self.number_of_regions(filename)
+            region_labels.extend([label] * regions_in_filename)
+        return region_labels
