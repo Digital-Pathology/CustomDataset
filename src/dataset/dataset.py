@@ -10,7 +10,6 @@
 
 from collections import OrderedDict
 from typing import Any, Callable, Generator, Tuple, Union
-from importlib_metadata import files
 
 import numpy as np
 from torch.utils.data import Dataset as PyTorchDataset
@@ -279,7 +278,7 @@ class Dataset(PyTorchDataset):
                 label_distribution[label] -= self._region_discounts[image]
         return label_distribution
 
-    def iterate_by_file(self) -> Generator[Tuple[str, Any, Generator], None, None]:
+    def iterate_by_file(self, as_pytorch_datasets=False) -> Generator[Tuple[str, Any, Generator], None, None]:
         """
         iterate_by_file allows for users to iterate over region in an image given the filename and the label
 
@@ -292,22 +291,45 @@ class Dataset(PyTorchDataset):
             regions = list(regions)
             continue
         """
-        def regions_generator(filename: str) -> Generator[np.ndarray, None, None]:
-            """
-            regions_generator iterates over the regions in an image
 
-            :param filename: the image to iterate over
-            :type filename: str
-            :yield: regions
-            :rtype: numpy.ndarray
-            """
-            for i in range(self.number_of_regions(filename)):
-                yield self.get_region(filename, i)
-        for filename in self._filepaths:
-            yield filename, self.get_label(filename), regions_generator(filename)
+        if not as_pytorch_datasets:
+            def regions_generator(filename: str) -> Generator[np.ndarray, None, None]:
+                """
+                regions_generator iterates over the regions in an image
+
+                :param filename: the image to iterate over
+                :type filename: str
+                :yield: regions
+                :rtype: numpy.ndarray
+                """
+                for i in range(self.number_of_regions(filename)):
+                    yield self.get_region(filename, i)
+            for filename in self._filepaths:
+                yield filename, self.get_label(filename), regions_generator(filename)
+        else:
+            class SingleFileDataset(PyTorchDataset):
+                def __init__(self, base_dataset, filename) -> None:
+                    self.base_dataset = base_dataset
+                    self.filename = filename
+
+                def __getitem__(self, index):
+                    return self.base_dataset.get_region(self.filename, index)
+
+                def __len__(self):
+                    return self.base_dataset.number_of_regions(self.filename)
+            for filename in self._filepaths:
+                yield filename, self.get_label(filename), SingleFileDataset(base_dataset=self, filename=filename)
 
     def number_of_regions(self, filename):
         n = self._region_counts[filename]
         if self.filtration is not None:
             n -= self._region_discounts[filename]
         return n
+
+    def get_region_labels_as_list(self):
+        region_labels = []
+        for filename in self._filepaths:
+            label = self.get_label(filename)
+            regions_in_filename = self.number_of_regions(filename)
+            region_labels.extend([label] * regions_in_filename)
+        return region_labels
