@@ -9,10 +9,13 @@
 """
 
 from collections import OrderedDict
-from typing import Any, Callable, Generator, Tuple, Union
+from multiprocessing import Pool
+import os
+from typing import Any, Callable, Generator, Optional, Tuple, Union
 
 import numpy as np
 from torch.utils.data import Dataset as PyTorchDataset
+from tqdm import tqdm as loadingbar
 
 from filtration import FilterManager, Filter
 from unified_image_reader import Image
@@ -20,7 +23,7 @@ from unified_image_reader import Image
 from . import config
 from .filtration_cache import FiltrationCache
 from .label_manager import LabelManager
-from .util import listdir_recursive
+from .util import listdir_recursive, starmap_with_kwargs
 
 # TODO - add behavior for unlabeled dataset
 
@@ -32,12 +35,15 @@ class Dataset(PyTorchDataset):
     """
 
     def __init__(self,
-                 data_dir: str,
+                 data: str,
                  labels: Union[LabelManager, str],
                  augmentation: Union[Callable, None] = None,
                  filtration: Union[Filter, FilterManager, None] = None,
                  filtration_cache: Union[str, FiltrationCache, None] =
                  config.DEFAULT_FILTRATION_CACHE_FILEPATH,
+                 filtration_preprocess: Optional[dict] = None,
+                 filtration_preprocess_loadingbars: bool = False,
+                 filtration_preprocess_lazy: bool = False,
                  region_dims: tuple = config.REGION_DIMS):
         """
         __init__ initializes Dataset
@@ -57,11 +63,11 @@ class Dataset(PyTorchDataset):
         """
 
         # initialize dataset components
-        self.dir = data_dir
-        self._initialize_filepaths()
+        self._initialize_filepaths(data)
         self._initialize_label_manager(labels)
         self._initialize_augmentation(augmentation)
-        self._initialize_filtration(filtration, filtration_cache, region_dims)
+        self._initialize_filtration(filtration, filtration_cache, region_dims, filtration_preprocess_lazy,
+                                    filtration_preprocess, filtration_preprocess_loadingbars)
 
         # initialize dataset length
         self.region_dims = region_dims
@@ -69,11 +75,25 @@ class Dataset(PyTorchDataset):
         self._initialize_region_discounts()
         self._initialize_length()
 
-    def _initialize_filepaths(self):
+    def _initialize_filepaths(self, data):
         """
-        _initialize_filepaths initializes filepaths using self.dir
+        _initialize_filepaths
         """
-        self._filepaths = listdir_recursive(self.dir)
+        self._filepaths = None
+        if isinstance(data, str):  # expecting a path
+            if not os.path.exists(data):
+                raise Exception(f"Excepted a path but {data} does not exist as a path")
+            if os.path.isdir(data):
+                self._filepaths = listdir_recursive(data)
+            elif os.path.isfile(data):
+                self._filepaths = [data]
+        elif isinstance(data, [list, tuple]):
+            self._filepaths = data
+            for filepath in self._filepaths:
+                if not os.path.isfile(filepath):
+                    raise Exception(f"{filepath} should be a path to an image")
+        else:
+            raise TypeError(f"Didn't expect {type(data)=}, {data=}")
 
     def _initialize_label_manager(self, labels: Union[LabelManager, str, None]):
         """
@@ -94,7 +114,10 @@ class Dataset(PyTorchDataset):
     def _initialize_filtration(self,
                                filtration: Union[FilterManager, Filter, None],
                                filtration_cache: Union[FiltrationCache, str, None],
-                               region_dims: tuple):
+                               region_dims: tuple,
+                               filtration_preprocess_lazy: bool,
+                               filtration_preprocess: Optional[dict],
+                               filtration_preprocess_loadingbars: bool):
         """
         _initialize_filtration initializes filtration if applicable
 
@@ -104,6 +127,8 @@ class Dataset(PyTorchDataset):
         :type filtration_cache: Union[FiltrationCache, str, None]
         :param region_dims: dimensions of the images' regions
         :type region_dims: tuple
+        :param filtration_preprocess: kwargs for filtration preprocessing for measure-based top-n filtration
+        :type filtration_preprocess: Optional[dict]
         :raises Exception: if region dimensions are conflicting given both region dimensions and existing filtration cache
         :raises TypeError: if the filtration cache is of unsupported type
         """
@@ -121,7 +146,8 @@ class Dataset(PyTorchDataset):
                             {region_dims=}, {self.filtration_cache.region_dims=}")
             else:
                 raise TypeError(type(self.filtration_cache))
-            self._preprocess_images()
+            if not filtration_preprocess_lazy:
+                self._preprocess_images(filtration_preprocess, filtration_preprocess_loadingbars)
 
     def _initialize_augmentation(self, augmentation: Union[Callable, None]):
         """
@@ -144,7 +170,7 @@ class Dataset(PyTorchDataset):
         _initialize_region_discounts initializes region discounts based on filtration/filtration_cache, if applicable
         """
         self._region_discounts = OrderedDict({
-            img: None for img in self._region_counts.keys()
+            img: 0 for img in self._region_counts.keys()
         })
         if self.filtration is not None:
             for img in self._region_discounts.keys():
@@ -162,14 +188,35 @@ class Dataset(PyTorchDataset):
         if self.filtration is not None:
             self._length -= sum(self._region_discounts.values())
 
-    def _preprocess_images(self):
+    def _preprocess_images(self, filtration_preprocess: Optional[dict], loadingbars: bool) -> None:
         """
         _preprocess_images preprocesses images w.r.t. filtration and the filtration cache
+
+        :param filtration_preprocess: additional arguments to pass to self.filtration_cache.preprocess such as for measure-based top-n filtration
+        :type filtration_preprocess: Optional[dict]
         """
-        for i, image in enumerate(self._filepaths):
-            #print(f"Preprocessing {i}/{len(self._filepaths)} {image}")
-            self.filtration_cache.preprocess(
-                self.filtration, image, overwrite=False)
+        if not config.DATASET_FILTRATION_PREPROCESSING_MULTIPROCESSING:
+            iterator = enumerate(self._filepaths)
+            if loadingbars:
+                iterator = loadingbar(iterator, total=len(self._filepaths))
+            for i, image in iterator:
+                self.filtration_cache.preprocess(
+                    self.filtration, image, overwrite=False, loadingbars=loadingbars, **(filtration_preprocess or {}))
+        else:
+            try:
+                pool = Pool()
+                starmap_with_kwargs(pool, self.filtration_cache.preprocess,
+                                    args_iter=((self.filtration, image) for image in self._filepaths),
+                                    kwargs_iter=({
+                                        "overwrite": False,
+                                        "loadingbars": False,
+                                        **(filtration_preprocess or {})
+                                    } for _ in self._filepaths)
+                                    )
+            except Exception as e:
+                pool.close()
+                pool.join()
+                raise e
 
     def __len__(self) -> int:
         """
@@ -252,13 +299,11 @@ class Dataset(PyTorchDataset):
         if self.filtration is None:
             pass  # region num is exactly what it seems like
         else:  # check filtration cache for proper target region
-            #print(region_num, type(region_num))
             region_num = int(self.filtration_cache.get_status(
                 self.filtration,
                 filename,
                 region_num
             )[1])
-            #print(region_num, type(region_num))
         return Image(filename).get_region(region_num)
 
     def get_label_distribution(self) -> dict:
@@ -278,18 +323,12 @@ class Dataset(PyTorchDataset):
                 label_distribution[label] -= self._region_discounts[image]
         return label_distribution
 
-    def iterate_by_file(self, as_pytorch_datasets=False) -> Generator[Tuple[str, Any, Generator], None, None]:
+    def iterate_by_file(self, index_subset=None, as_pytorch_datasets=False) -> Generator[Tuple[str, Any, Generator], None, None]:
         """
         iterate_by_file allows for users to iterate over region in an image given the filename and the label
 
         :yield: the filename, the label, and an iterator for the regions in the image
         :rtype: Tuple[str, Any, Generator]
-        """
-        """ 
-        dataset = Dataset()
-        for (filename, label, regions) in dataset.iterate_by_file():
-            regions = list(regions)
-            continue
         """
 
         if not as_pytorch_datasets:
@@ -333,3 +372,9 @@ class Dataset(PyTorchDataset):
             regions_in_filename = self.number_of_regions(filename)
             region_labels.extend([label] * regions_in_filename)
         return region_labels
+
+    def __iter__(self):
+        i = 0
+        while i < len(self):
+            yield self[i]
+            i += 1
