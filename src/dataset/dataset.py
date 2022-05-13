@@ -43,6 +43,7 @@ class Dataset(PyTorchDataset):
                  config.DEFAULT_FILTRATION_CACHE_FILEPATH,
                  filtration_preprocess: Optional[dict] = None,
                  filtration_preprocess_loadingbars: bool = False,
+                 filtration_preprocess_lazy: bool = False,
                  region_dims: tuple = config.REGION_DIMS):
         """
         __init__ initializes Dataset
@@ -65,7 +66,8 @@ class Dataset(PyTorchDataset):
         self._initialize_filepaths(data)
         self._initialize_label_manager(labels)
         self._initialize_augmentation(augmentation)
-        self._initialize_filtration(filtration, filtration_cache, region_dims, filtration_preprocess, filtration_preprocess_loadingbars)
+        self._initialize_filtration(filtration, filtration_cache, region_dims, filtration_preprocess_lazy,
+                                    filtration_preprocess, filtration_preprocess_loadingbars)
 
         # initialize dataset length
         self.region_dims = region_dims
@@ -113,6 +115,7 @@ class Dataset(PyTorchDataset):
                                filtration: Union[FilterManager, Filter, None],
                                filtration_cache: Union[FiltrationCache, str, None],
                                region_dims: tuple,
+                               filtration_preprocess_lazy: bool,
                                filtration_preprocess: Optional[dict],
                                filtration_preprocess_loadingbars: bool):
         """
@@ -143,7 +146,8 @@ class Dataset(PyTorchDataset):
                             {region_dims=}, {self.filtration_cache.region_dims=}")
             else:
                 raise TypeError(type(self.filtration_cache))
-            self._preprocess_images(filtration_preprocess, filtration_preprocess_loadingbars)
+            if not filtration_preprocess_lazy:
+                self._preprocess_images(filtration_preprocess, filtration_preprocess_loadingbars)
 
     def _initialize_augmentation(self, augmentation: Union[Callable, None]):
         """
@@ -319,7 +323,7 @@ class Dataset(PyTorchDataset):
                 label_distribution[label] -= self._region_discounts[image]
         return label_distribution
 
-    def iterate_by_file(self, as_pytorch_datasets=False) -> Generator[Tuple[str, Any, Generator], None, None]:
+    def iterate_by_file(self, index_subset=None, as_pytorch_datasets=False) -> Generator[Tuple[str, Any, Generator], None, None]:
         """
         iterate_by_file allows for users to iterate over region in an image given the filename and the label
 
