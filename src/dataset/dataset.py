@@ -10,7 +10,7 @@
 from collections import OrderedDict
 from multiprocessing import Pool
 import os
-from typing import Any, Callable, Generator, Optional, Tuple, Union
+from typing import Any, Callable, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 from torch.utils.data import Dataset as PyTorchDataset
@@ -380,7 +380,7 @@ class Dataset(PyTorchDataset):
             n -= self._region_discounts[filename]
         return n
 
-    def get_region_labels_as_list(self) -> list[Any]:
+    def get_region_labels_as_list(self) -> List[Any]:
         """
         get_region_labels_as_list returns an ordered list of region labels corresponding to the order of regions in the dataset
 
