@@ -24,7 +24,9 @@ from . import util
 from . import config
 
 
-# TODO - This class is too big and should be aggregating a wrapper on the pytables functionality
+# TODO - This class is too big and should be aggregating an adapter on the pytables functionality
+# TODO - finish thread-safety precautions
+# TODO - improve filtration string representation system
 
 
 class FiltrationCache(AbstractContextManager):
@@ -260,11 +262,15 @@ class FiltrationCache(AbstractContextManager):
         self.__del__()
 
 
-def preprocess(filtration: Callable, filepath: util.FilePath, region_dims: unified_image_reader.util.RegionDimensions, loadingbars: bool, **kwargs) -> Tuple[Dict[int, util.FiltrationStatus], int]:
+def preprocess(filtration: Callable,
+               filepath: util.FilePath,
+               region_dims: unified_image_reader.util.RegionDimensions,
+               loadingbars: bool,
+               **kwargs) -> Tuple[Dict[int, util.FiltrationStatus], int]:
     """
     preprocess returns a mapping of region index to (fitration status and dark-region-mapped region index)
 
-    :param filtration: the filtration to apply to the image's regions
+    :param filtration: the filtration to apply to the image's regions. If callable and not strictly filtration, then a ranked threshold approach is used - see _apply_filtration_to_regions_ranked_threshold
     :type filtration: util.FiltrationRepr
     :param filepath: the filepath where the image in question is found
     :type filepath: util.FilePath

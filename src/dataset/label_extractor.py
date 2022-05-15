@@ -29,7 +29,7 @@ class LabelExtractorNoLabels(LabelExtractor):
 
     @staticmethod
     def extract_labels(path: str):
-        """ returns None for all labels """
+        """ returns 'LabelExtractorNoLabels' for all labels """
         return LabelExtractorNoLabels.DefaultDictWithGet()
 
 

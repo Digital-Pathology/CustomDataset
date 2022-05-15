@@ -1,11 +1,10 @@
 
 """
-    Custom Dataset
-
-    1) give it a directory of images, and a set of labels for those images
-    2) count the regions in each image to get an initial length
-    4) include functionality for filtration
-    5) include functionality for augmentation
+    The Dataset object aggregates information about your whole-slide images,
+    their labels, any filtration that should be applied to regions thereof,
+    and any augmentation functions that should be applied to the regions as
+    they are fetched from the disk. This class inherits from PyTorch's
+    dataset.
 """
 
 from collections import OrderedDict
@@ -31,7 +30,7 @@ from .util import listdir_recursive, starmap_with_kwargs
 class Dataset(PyTorchDataset):
 
     """
-    Dataset is used to organize heirachical data
+    Dataset implements automatic label inference, optional augmentation, and optional dynamic filtration.
     """
 
     def __init__(self,
@@ -58,6 +57,12 @@ class Dataset(PyTorchDataset):
         :type filtration: Union[Filter, FilterManager, None], optional
         :param filtration_cache: Reference to cache for filtration results, defaults to config.DEFAULT_FILTRATION_CACHE_FILEPATH
         :type filtration_cache: Union[str, FiltrationCache, None], optional
+        :param filtration_preprocess: A dictionary passed as kwargs to filtration preprocessing functions, defaults to None
+        :type filtration_preprocess: Optional[dict]
+        :param filtration_preprocess_loadingbars: whether to display loadingbars during preprocessing, defaults to False
+        :type filtration_preprocess: bool
+        :param filtration_preprocess_lazy: whether to avoid filtration preprocessing during dataset initialization, defaults to False
+        :type filtration_preprocess_lazy: bool
         :param region_dims: width and height of the images' regions, defaults to config.REGION_DIMS
         :type region_dims: tuple, optional
         """
@@ -77,7 +82,7 @@ class Dataset(PyTorchDataset):
 
     def _initialize_filepaths(self, data):
         """
-        _initialize_filepaths
+            _initialize_filepaths
         """
         self._filepaths = None
         if isinstance(data, str):  # expecting a path
@@ -323,10 +328,12 @@ class Dataset(PyTorchDataset):
                 label_distribution[label] -= self._region_discounts[image]
         return label_distribution
 
-    def iterate_by_file(self, index_subset=None, as_pytorch_datasets=False) -> Generator[Tuple[str, Any, Generator], None, None]:
+    def iterate_by_file(self, as_pytorch_datasets=False) -> Generator[Tuple[str, Any, Generator], None, None]:
         """
-        iterate_by_file allows for users to iterate over region in an image given the filename and the label
+        iterate_by_file allows for users to iterate over regions in an image given the filename and the label
 
+        :param as_pytorch_datasets: Whether to return pytorch datasets instead of the normal generators, defaults to False
+        :type as_pytorch_datasets: bool
         :yield: the filename, the label, and an iterator for the regions in the image
         :rtype: Tuple[str, Any, Generator]
         """
@@ -359,13 +366,27 @@ class Dataset(PyTorchDataset):
             for filename in self._filepaths:
                 yield filename, self.get_label(filename), SingleFileDataset(base_dataset=self, filename=filename)
 
-    def number_of_regions(self, filename):
+    def number_of_regions(self, filename: Optional[str] = None) -> int:
+        """
+        number_of_regions get the number of regions in the dataset or in a single image managed by the dataset
+
+        :param filename: An optional parameter which will get the number of regions in that image (if it's in the dataset) instead of the number of regions in the entire dataset, defaults to None
+        :type filename: Optional[str]
+        :return: the number of regions in the dataset or image at filename
+        :rtype: int
+        """
         n = self._region_counts[filename]
         if self.filtration is not None:
             n -= self._region_discounts[filename]
         return n
 
-    def get_region_labels_as_list(self):
+    def get_region_labels_as_list(self) -> list[Any]:
+        """
+        get_region_labels_as_list returns an ordered list of region labels corresponding to the order of regions in the dataset
+
+        :return: a list of labels
+        :rtype: list[Any]
+        """
         region_labels = []
         for filename in self._filepaths:
             label = self.get_label(filename)

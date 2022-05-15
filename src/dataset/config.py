@@ -1,6 +1,6 @@
 
 """
-    Configuration for the custom dataset
+    Configuration for development - change these with caution!
 """
 
 

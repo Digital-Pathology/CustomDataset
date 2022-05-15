@@ -50,7 +50,7 @@ class ThreadingLock(contextlib.AbstractContextManager):
         A wrapper on threading.Lock that implements a context manager so that when the context closes the lock will unlock
 
         Example:
-            with status_lock as permission:
+            with status_lock as permission: # will hang until it gets permission
                 # do things
     """
 
@@ -67,11 +67,11 @@ class ThreadingLock(contextlib.AbstractContextManager):
 
 
 def starmap_with_kwargs(pool, fn, args_iter, kwargs_iter):
-    # https://stackoverflow.com/a/53173433/13747259
+    """ https://stackoverflow.com/a/53173433/13747259 """
     args_for_starmap = zip(repeat(fn), args_iter, kwargs_iter)
     return pool.starmap(apply_args_and_kwargs, args_for_starmap)
 
 
 def apply_args_and_kwargs(fn, args, kwargs):
-    # https://stackoverflow.com/a/53173433/13747259
+    """ https://stackoverflow.com/a/53173433/13747259 """
     return fn(*args, **kwargs)
