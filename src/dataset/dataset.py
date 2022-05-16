@@ -309,7 +309,9 @@ class Dataset(PyTorchDataset):
                 filename,
                 region_num
             )[1])
-        return Image(filename).get_region(region_num)
+        region = Image(filename).get_region(region_num)
+        region = self.augment_region(region)
+        return region
 
     def get_label_distribution(self) -> dict:
         """
