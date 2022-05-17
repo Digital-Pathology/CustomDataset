@@ -87,7 +87,8 @@ class Dataset(PyTorchDataset):
         self._filepaths = None
         if isinstance(data, str):  # expecting a path
             if not os.path.exists(data):
-                raise Exception(f"Excepted a path but {data} does not exist as a path")
+                raise Exception(
+                    f"Excepted a path but {data} does not exist as a path")
             if os.path.isdir(data):
                 self._filepaths = listdir_recursive(data)
             elif os.path.isfile(data):
@@ -152,7 +153,8 @@ class Dataset(PyTorchDataset):
             else:
                 raise TypeError(type(self.filtration_cache))
             if not filtration_preprocess_lazy:
-                self._preprocess_images(filtration_preprocess, filtration_preprocess_loadingbars)
+                self._preprocess_images(
+                    filtration_preprocess, filtration_preprocess_loadingbars)
 
     def _initialize_augmentation(self, augmentation: Union[Callable, None]):
         """
@@ -211,7 +213,8 @@ class Dataset(PyTorchDataset):
             try:
                 pool = Pool()
                 starmap_with_kwargs(pool, self.filtration_cache.preprocess,
-                                    args_iter=((self.filtration, image) for image in self._filepaths),
+                                    args_iter=((self.filtration, image)
+                                               for image in self._filepaths),
                                     kwargs_iter=({
                                         "overwrite": False,
                                         "loadingbars": False,

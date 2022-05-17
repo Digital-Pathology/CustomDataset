@@ -217,7 +217,8 @@ class FiltrationCache(AbstractContextManager):
         with self._lock as permission:
             if filtration not in self.h5file.root:
                 if create_if_missing:
-                    group = self.h5file.create_group("/", filtration, filtration)
+                    group = self.h5file.create_group(
+                        "/", filtration, filtration)
             else:
                 group = self.h5file.root.__getattr__(filtration)
         return group
@@ -382,7 +383,8 @@ def _apply_filtration_to_regions_ranked_threshold(measure: Callable, filepath: u
     measures.sort()
     with open('temp.measures', 'w' if os.path.exists('temp.measures') else 'x') as f:
         f.write(str(measures))
-    records = {i: {"region_index_target": -1, "filtration_status": False} for i in range(img.number_of_regions())}
+    records = {i: {"region_index_target": -1, "filtration_status": False}
+               for i in range(img.number_of_regions())}
     dark_regions_total = 0
     for measure, region_index in measures[:n_regions]:
         if threshold is None or measure >= threshold:

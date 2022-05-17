@@ -15,7 +15,8 @@ from filtration import Filter, FilterManager
 
 FilePath = NewType('Filepath', str)
 FiltrationRepr = NewType('FiltrationRepr', Union[Filter, FilterManager, str])
-FiltrationStatus = NewType('FiltrationStatus', Tuple[int, int, bool])  # index, index_target, filtration_status
+# index, index_target, filtration_status
+FiltrationStatus = NewType('FiltrationStatus', Tuple[int, int, bool])
 FiltrationCacheMetadata = NewType(
     'FiltrationCacheMetadata', Optional[Dict[str, Any]])
 
