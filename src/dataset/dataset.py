@@ -68,16 +68,24 @@ class Dataset(PyTorchDataset):
         """
 
         # initialize dataset components
+        print("In dataset")
+        print("before initialize_filepaths")
         self._initialize_filepaths(data)
+        print("before initialize_label_manager")
         self._initialize_label_manager(labels)
+        print("before initialize_augmentation")
         self._initialize_augmentation(augmentation)
+        print("before initialize_filtration")
         self._initialize_filtration(filtration, filtration_cache, region_dims, filtration_preprocess_lazy,
                                     filtration_preprocess, filtration_preprocess_loadingbars)
 
         # initialize dataset length
         self.region_dims = region_dims
+        print("before initialize_region_counts")
         self._initialize_region_counts()
+        print("before initialize_region_counts")
         self._initialize_region_discounts()
+        print("before initialize_region_counts")
         self._initialize_length()
 
     def _initialize_filepaths(self, data):
