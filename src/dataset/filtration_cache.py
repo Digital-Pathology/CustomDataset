@@ -146,6 +146,8 @@ class FiltrationCache(AbstractContextManager):
         :param overwrite: whether to overwrite existing data, if applicable, defaults to True
         :type overwrite: bool, optional
         """
+        print("log: inside filteration_cache.preprocess() for file", filepath)
+        print("log: inside filteration_cache.preprocess() filteration=", filtration)
         if os.path.isdir(filepath):  # is directory of image files
             filepaths = util.listdir_recursive(filepath)
             for f in filepaths:
@@ -170,6 +172,7 @@ class FiltrationCache(AbstractContextManager):
             with self._lock as permission:
                 row = table.row
                 for i in range(len(records)):
+                    print("log: preprocessing for index",i)
                     row["region_index_base"] = i
                     row["region_index_target"] = records[i]["region_index_target"]
                     row["filtration_status"] = records[i]["filtration_status"]

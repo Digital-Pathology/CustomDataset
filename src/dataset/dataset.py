@@ -163,8 +163,11 @@ class Dataset(PyTorchDataset):
             else:
                 raise TypeError(type(self.filtration_cache))
             if not filtration_preprocess_lazy:
+                print("log: before preprocessing images")
                 self._preprocess_images(
                     filtration_preprocess, filtration_preprocess_loadingbars)
+                print("log: after preprocessing images")
+
 
     def _initialize_augmentation(self, augmentation: Union[Callable, None]):
         """
