@@ -70,6 +70,8 @@ class FiltrationCache(AbstractContextManager):
         :type region_dims: Optional[unified_image_reader.util.RegionDimensions], optional
         """
         # save parameters
+        print("log: inside filteration cache h5filepath, h5filetitle, region_dims: ", h5filepath, h5filetitle, region_dims)
+
         self.h5filepath = h5filepath
         self.h5filetitle = h5filetitle
         self.region_dims = region_dims
@@ -99,6 +101,7 @@ class FiltrationCache(AbstractContextManager):
         :return: a tuple of (region index, target region index, region index filtration status)
         :rtype: util.FiltrationReprStatus
         """
+        
         group = self._get_group(filtration)
         table = self._get_table(group, filepath)
         if region_index is None:  # get all
