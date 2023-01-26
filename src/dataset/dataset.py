@@ -220,8 +220,10 @@ class Dataset(PyTorchDataset):
             if loadingbars:
                 iterator = loadingbar(iterator, total=len(self._filepaths))
             for i, image in iterator:
+                print("log: before preprocessing image with index", i)
                 self.filtration_cache.preprocess(
                     self.filtration, image, overwrite=False, loadingbars=loadingbars, **(filtration_preprocess or {}))
+            print("log: after filtering all images")
         else:
             try:
                 pool = Pool()

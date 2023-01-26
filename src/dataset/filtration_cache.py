@@ -171,12 +171,13 @@ class FiltrationCache(AbstractContextManager):
             table = self._get_table(group, filepath)
             with self._lock as permission:
                 row = table.row
+                print("log: records for file ", filepath , records)
                 for i in range(len(records)):
-                    print("log: preprocessing for index",i)
                     row["region_index_base"] = i
                     row["region_index_target"] = records[i]["region_index_target"]
                     row["filtration_status"] = records[i]["filtration_status"]
                     row.append()
+                
                 table.attrs["_image_filepath"] = os.path.basename(filepath)
                 table.attrs["_image_size"] = unified_image_reader.Image(
                     filepath).dims
